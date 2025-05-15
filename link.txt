@@ -1,0 +1,1 @@
+https://open-meteo.com/en/docs?latitude=49.6887&longitude=21.7706&forecast_days=3&hourly=temperature_2m,cloud_cover,global_tilted_irradiance
