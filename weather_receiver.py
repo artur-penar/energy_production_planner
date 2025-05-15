@@ -16,6 +16,7 @@ params = {
     "latitude": 49.6887,
     "longitude": 21.7706,
     "hourly": ["temperature_2m", "cloud_cover", "global_tilted_irradiance"],
+    "past_days": 14,
     "forecast_days": 3
 }
 responses = openmeteo.weather_api(url, params=params)
