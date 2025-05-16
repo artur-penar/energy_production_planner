@@ -2,9 +2,10 @@ import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # Wczytaj dane z pliku Excel
-df = pd.read_excel("data.xlsx")  # podaj właściwą nazwę pliku
+df = pd.read_excel("learning_data.xlsx")  # podaj właściwą nazwę pliku
 
 df.columns = df.columns.str.strip()  # USUWA SPACJE z nazw kolumn
 
@@ -17,28 +18,34 @@ df["data"] = df["data"].dt.date
 
 # Wybierz cechy wejściowe
 features = ["temp", "gti", "godzina", "is_holiday"]
-targets = ["rco 243 kW", "rco 894 kW", "energia_oddana_kWh"]
+targets = ["rco 243 kW", "energia_oddana_kWh"]
 
 
 # Przykład: przewidujemy tylko tam, gdzie brakuje wartości (np. NaN)
 for target in targets:
-    # Podziel na dane z targetem i bez
     train_df = df[df[target].notna()]
-    predict_df = df[df[target].isna()]
-    if len(predict_df) == 0:
-        continue  # nic do przewidzenia
-
     X_train = train_df[features]
     y_train = train_df[target]
-    X_pred = predict_df[features]
 
-    # Trenuj model
+    # Podział na zbiór treningowy i testowy
+    X_tr, X_te, y_tr, y_te = train_test_split(
+        X_train, y_train, test_size=0.2, random_state=42
+    )
     model = RandomForestRegressor(n_estimators=100, random_state=42)
-    model.fit(X_train, y_train)
+    model.fit(X_tr, y_tr)
+    y_pred_test = model.predict(X_te)
 
-    # Przewiduj brakujące wartości
-    y_pred = model.predict(X_pred)
-    df.loc[df[target].isna(), target] = y_pred
+    mae = mean_absolute_error(y_te, y_pred_test)
+    rmse = np.sqrt(mean_squared_error(y_te, y_pred_test))
+    r2 = r2_score(y_te, y_pred_test)
+    print(f"{target}: MAE={mae:.2f}, RMSE={rmse:.2f}, R2={r2:.2f}")
+
+    # Predykcja tylko jeśli są braki
+    predict_df = df[df[target].isna()]
+    if len(predict_df) > 0:
+        X_pred = predict_df[features]
+        y_pred = model.predict(X_pred)
+        df.loc[df[target].isna(), target] = y_pred
 
 # Zapisz uzupełnione dane również do Excela
 df.to_excel("uzupelnione_dane.xlsx", index=False)
