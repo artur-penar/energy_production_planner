@@ -5,11 +5,11 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # Wczytaj dane z pliku Excel
-df = pd.read_excel("learning_data.xlsx")  # podaj właściwą nazwę pliku
+df = pd.read_excel("learning_data_reduced.xlsx")  # podaj właściwą nazwę pliku
 
 df.columns = df.columns.str.strip()  # USUWA SPACJE z nazw kolumn
 
-print(df.columns.tolist())  # Wyświetli dokładne nazwy kolumn
+print(df.columns.tolist())
 # Przekształć datę na datetime, jeśli trzeba
 df["data"] = pd.to_datetime(df["data"], format="%d.%m.%Y")
 
@@ -39,6 +39,7 @@ for target in targets:
     rmse = np.sqrt(mean_squared_error(y_te, y_pred_test))
     r2 = r2_score(y_te, y_pred_test)
     print(f"{target}: MAE={mae:.2f}, RMSE={rmse:.2f}, R2={r2:.2f}")
+    print(f"Liczba próbek do treningu/testu dla {target}: {len(train_df)}")
 
     # Predykcja tylko jeśli są braki
     predict_df = df[df[target].isna()]
@@ -58,12 +59,6 @@ pivot_243 = df.pivot_table(
 pivot_243.index = pivot_243.index + 1  # godziny od 1 do 24
 pivot_243.index.name = "godzina"
 
-# Przygotuj tabelę przestawną dla rco 894 kW
-pivot_894 = df.pivot_table(
-    index="godzina", columns="data", values="rco 894 kW", aggfunc="sum"
-)
-pivot_894.index = pivot_894.index + 1
-pivot_894.index.name = "godzina"
 
 pivot_energia_oddana = df.pivot_table(
     index="godzina", columns="data", values="energia_oddana_kWh", aggfunc="sum"
@@ -72,7 +67,6 @@ pivot_energia_oddana.index = pivot_energia_oddana.index + 1
 pivot_energia_oddana.index.name = "godzina"
 
 # Zapisz do plików Excel
-pivot_243.to_excel("energia_rco_243_v2.xlsx", float_format="%.2f")
-pivot_894.to_excel("energia_rco_894_v2.xlsx", float_format="%.2f")
-pivot_energia_oddana.to_excel("energia_oddana_v2.xlsx", float_format="%.2f")
+pivot_243.to_excel("energia_rco_243.xlsx", float_format="%.2f")
+pivot_energia_oddana.to_excel("energia_oddana.xlsx", float_format="%.2f")
 print("Dane zapisane do energia_rco_243.xlsx oraz energia_rco_894.xlsx")
