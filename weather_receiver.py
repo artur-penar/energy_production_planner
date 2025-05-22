@@ -16,8 +16,8 @@ params = {
     "latitude": 49.6887,
     "longitude": 21.7706,
     "hourly": ["temperature_2m", "cloud_cover", "global_tilted_irradiance"],
-    "past_days": 14,
-    "forecast_days": 3
+    "past_days": 1,
+    "forecast_days": 3 
 }
 responses = openmeteo.weather_api(url, params=params)
 
@@ -48,6 +48,6 @@ hourly_data["global_tilted_irradiance"] = hourly_global_tilted_irradiance
 hourly_dataframe = pd.DataFrame(data = hourly_data)
 
 # Save the dataframe to a CSV file
-output_file = "hourly_weather_data.csv"
+output_file = "data/input/weather_hourly.csv"
 hourly_dataframe.to_csv(output_file, index=False)
 print(f"Data saved to {output_file}")
