@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # Wczytaj dane z przewidywaną produkcją PV
-df = pd.read_excel("data/predicted_pv.xlsx")
+df = pd.read_excel("data/input/pv_predicted.xlsx")
 df.columns = df.columns.str.strip()
 
 print(df.columns.tolist())
@@ -41,7 +41,7 @@ if len(predict_df) > 0:
     df.loc[df[target_oddana].isna(), target_oddana] = y_pred
 
 # Zapisz dane z przewidywaną energią oddaną
-df.to_excel("predicted_sold_energy.xlsx", index=False)
+df.to_excel("data/output/sold_predicted.xlsx", index=False)
 print("Zapisano dane z przewidywaną energią oddaną do predicted_oddana.xlsx")
 
 # Przygotuj tabelę przestawną dla energii sprzedanej
@@ -52,5 +52,5 @@ pivot_sold.index = pivot_sold.index + 1  # godziny od 1 do 24
 pivot_sold.index.name = "hour"
 
 # Zapisz do pliku Excel
-pivot_sold.to_excel("predicted_sold_energy_transformed.xlsx", float_format="%.2f")
+pivot_sold.to_excel("data/output/sold_pivot.xlsx", float_format="%.2f")
 print("Dane zapisane do transformed_sold_energy.xlsx")

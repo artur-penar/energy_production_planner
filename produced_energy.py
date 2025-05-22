@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # Wczytaj dane z pliku Excel
-df = pd.read_excel("data/data_to_predict.xlsx")
+df = pd.read_excel("data/input/production_to_predict.xlsx")
 df.columns = df.columns.str.strip()
 
 print(df.columns.tolist())
@@ -38,8 +38,8 @@ if len(predict_df) > 0:
     df.loc[df[target_pv].isna(), target_pv] = y_pred
 
 # Zapisz dane z przewidywaną produkcją PV
-df.to_excel("data/predicted_pv.xlsx", index=False)
-print("Zapisano dane z przewidywaną produkcją PV do predicted_pv.xlsx")
+df.to_excel("data/input/pv_predicted.xlsx", index=False)
+print("Zapisano dane z przewidywaną produkcją PV do pv_predicted.xlsx")
 
 # Przygotuj tabelę przestawną dla rco 243 kW
 produced_pivot = df.pivot_table(
@@ -49,5 +49,5 @@ produced_pivot.index = produced_pivot.index + 1  # godziny od 1 do 24
 produced_pivot.index.name = "hour"
 
 # Zapisz do pliku Excel
-produced_pivot.to_excel("predicted_energy_production_transformed.xlsx", float_format="%.2f")
-print("Dane zapisane do predicted_energy_production.xlsx")
+produced_pivot.to_excel("data/output/pv_pivot.xlsx", float_format="%.2f")
+print("Dane zapisane do pv_pivot.xlsx")
