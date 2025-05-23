@@ -4,7 +4,7 @@ import requests_cache
 from retry_requests import retry
 
 class WeatherDataReceiver:
-    def __init__(self, latitude, longitude, output_file, past_days=1, forecast_days=3):
+    def __init__(self, latitude, longitude, output_file, past_days=1, forecast_days=1):
         self.latitude = latitude
         self.longitude = longitude
         self.output_file = output_file
@@ -55,6 +55,6 @@ if __name__ == "__main__":
         longitude=21.7706,
         output_file="data/input/weather_hourly.csv",
         past_days=1,
-        forecast_days=3
+        forecast_days=4
     )
     receiver.fetch_and_save()
