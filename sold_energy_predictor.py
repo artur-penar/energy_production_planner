@@ -57,6 +57,8 @@ class SoldEnergyPredictor:
         )
         pivot_sold.index = pivot_sold.index + 1  # godziny od 1 do 24
         pivot_sold.index.name = "hour"
+        # Dodaj wiersz z sumą na końcu
+        pivot_sold.loc['SUMA'] = pivot_sold.sum(numeric_only=True)
         pivot_sold.to_excel(self.output_pivot_path, float_format="%.2f")
         print(f"Dane zapisane do {self.output_pivot_path}")
 

@@ -9,7 +9,7 @@ class EnergyProductionPredictor:
         self.input_path = input_path
         self.output_pred_path = output_pred_path
         self.output_pivot_path = output_pivot_path
-        self.features = ["temp", "gti", "cloud", "hour", "is_holiday"]
+        self.features = ["temp", "gti", "cloud", "hour"]
         self.target = "produced_energy"
         self.df = None
         self.model = None
@@ -54,6 +54,8 @@ class EnergyProductionPredictor:
         )
         produced_pivot.index = produced_pivot.index + 1  # godziny od 1 do 24
         produced_pivot.index.name = "hour"
+        # Dodaj wiersz z sumą na końcu
+        produced_pivot.loc['SUMA'] = produced_pivot.sum(numeric_only=True)
         produced_pivot.to_excel(self.output_pivot_path, float_format="%.2f")
         print(f"Dane zapisane do {self.output_pivot_path}")
 
