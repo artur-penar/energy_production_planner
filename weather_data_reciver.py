@@ -3,7 +3,7 @@ import pandas as pd
 import requests_cache
 from retry_requests import retry
 
-class WeatherDataReceiver:
+class ForecastWeatherDataReceiver:
     def __init__(self, latitude, longitude, output_file, past_days=1, forecast_days=1):
         self.latitude = latitude
         self.longitude = longitude
@@ -50,10 +50,10 @@ class WeatherDataReceiver:
         print(f"Data saved to {self.output_file}")
 
 if __name__ == "__main__":
-    receiver = WeatherDataReceiver(
+    receiver = ForecastWeatherDataReceiver(
         latitude=49.6887,
         longitude=21.7706,
-        output_file="data/input/weather_hourly.csv",
+        output_file="data/weather/forecast_weather.csv",
         past_days=1,
         forecast_days=4
     )
