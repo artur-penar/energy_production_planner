@@ -58,3 +58,114 @@ def insert_calendar(df, engine):
 insert_calendar(df_calendar, engine)
 
 print("Dane zostały zaimportowane do tabeli calendar.")
+
+# --- Import danych do tabeli pv_production ---
+# Przygotuj dane do tabeli pv_production
+pv_cols = ["date", "hour", "produced_energy"]
+df_pv = df[pv_cols].copy()
+df_pv["type"] = "real"  # ustawiamy ręcznie
+df_pv["object_id"] = 1  # lub inny sposób ustalania object_id jeśli masz wiele obiektów
+
+# Usuń wiersze z brakującą datą lub godziną
+pv_required = ["date", "hour", "produced_energy", "type", "object_id"]
+df_pv = df_pv.dropna(subset=["date", "hour"])
+
+# Funkcja do wstawiania danych do tabeli pv_production
+def insert_pv_production(df, engine):
+    with engine.connect() as connection:
+        transaction = connection.begin()
+        try:
+            for _, row in df.iterrows():
+                query = text(f"""
+                    INSERT INTO pv_production (date, hour, produced_energy, type, object_id)
+                    VALUES ('{row['date']}', {row['hour']}, {row['produced_energy']}, '{row['type']}', {row['object_id']})
+                    ON CONFLICT (date, hour, object_id, type) DO NOTHING;
+                """)
+                print(f"[DEBUG] Query: {query}")
+                connection.execute(query)
+            transaction.commit()
+            print("[INFO] Transaction committed for table pv_production.")
+        except Exception as e:
+            transaction.rollback()
+            print(f"[ERROR] Transaction rolled back for table pv_production: {e}")
+        finally:
+            transaction.close()
+
+# Wstaw dane do tabeli pv_production
+insert_pv_production(df_pv[pv_required], engine)
+
+print("Dane zostały zaimportowane do tabeli pv_production.")
+
+# --- Import danych do tabeli sold_energy ---
+# Przygotuj dane do tabeli sold_energy
+sold_cols = ["date", "hour", "sold_energy"]
+df_sold = df[sold_cols].copy()
+df_sold["type"] = "real"  # ustawiamy ręcznie
+# Jeśli masz wiele obiektów, zmień object_id odpowiednio
+df_sold["object_id"] = 1
+
+# Usuń wiersze z brakującą datą lub godziną
+df_sold = df_sold.dropna(subset=["date", "hour"])
+sold_required = ["date", "hour", "sold_energy", "type", "object_id"]
+
+# Funkcja do wstawiania danych do tabeli sold_energy
+def insert_sold_energy(df, engine):
+    with engine.connect() as connection:
+        transaction = connection.begin()
+        try:
+            for _, row in df.iterrows():
+                query = text(f"""
+                    INSERT INTO sold_energy (date, hour, sold_energy, type, object_id)
+                    VALUES ('{row['date']}', {row['hour']}, {row['sold_energy']}, '{row['type']}', {row['object_id']})
+                    ON CONFLICT (date, hour, object_id, type) DO NOTHING;
+                """)
+                print(f"[DEBUG] Query: {query}")
+                connection.execute(query)
+            transaction.commit()
+            print("[INFO] Transaction committed for table sold_energy.")
+        except Exception as e:
+            transaction.rollback()
+            print(f"[ERROR] Transaction rolled back for table sold_energy: {e}")
+        finally:
+            transaction.close()
+
+# Wstaw dane do tabeli sold_energy
+insert_sold_energy(df_sold[sold_required], engine)
+
+print("Dane zostały zaimportowane do tabeli sold_energy.")
+
+# --- Import danych do tabeli weather ---
+# Przygotuj dane do tabeli weather
+weather_cols = ["date", "hour", "temp", "cloud", "gti"]
+df_weather = df[weather_cols].copy()
+df_weather["type"] = "real"  # ustawiamy ręcznie
+
+# Usuń wiersze z brakującą datą lub godziną
+df_weather = df_weather.dropna(subset=["date", "hour"])
+weather_required = ["date", "hour", "temp", "cloud", "gti", "type"]
+
+# Funkcja do wstawiania danych do tabeli weather
+def insert_weather(df, engine):
+    with engine.connect() as connection:
+        transaction = connection.begin()
+        try:
+            for _, row in df.iterrows():
+                query = text(f"""
+                    INSERT INTO weather (date, hour, temp, cloud, gti, type)
+                    VALUES ('{row['date']}', {row['hour']}, {row['temp']}, {row['cloud']}, {row['gti']}, '{row['type']}')
+                    ON CONFLICT (date, hour, type) DO NOTHING;
+                """)
+                print(f"[DEBUG] Query: {query}")
+                connection.execute(query)
+            transaction.commit()
+            print("[INFO] Transaction committed for table weather.")
+        except Exception as e:
+            transaction.rollback()
+            print(f"[ERROR] Transaction rolled back for table weather: {e}")
+        finally:
+            transaction.close()
+
+# Wstaw dane do tabeli weather
+insert_weather(df_weather[weather_required], engine)
+
+print("Dane zostały zaimportowane do tabeli weather.")
