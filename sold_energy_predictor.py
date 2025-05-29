@@ -9,7 +9,7 @@ class SoldEnergyPredictor:
         self.input_path = input_path
         self.output_pred_path = output_pred_path
         self.output_pivot_path = output_pivot_path
-        self.features = ["produced_energy", "hour", "is_holiday", "day_of_week"]
+        self.features = ["produced_energy", "hour", "is_holiday", "day_of_week", "month"]
         self.target = "sold_energy"
         self.df = None
         self.model = None
@@ -24,6 +24,7 @@ class SoldEnergyPredictor:
         self.df["date"] = pd.to_datetime(self.df["date"], errors="coerce")
         if self.df["date"].dtype != "O":
             self.df["date"] = self.df["date"].dt.date
+
 
     def train_model(self):
         train_df = self.df[self.df[self.target].notna()]
@@ -67,6 +68,7 @@ class SoldEnergyPredictor:
             (["produced_energy", "hour", "is_holiday"], "is_holiday"),
             (["produced_energy", "hour", "day_of_week"], "day_of_week"),
             (["produced_energy", "hour", "is_holiday", "day_of_week"], "is_holiday + day_of_week"),
+            (["produced_energy", "hour", "is_holiday", "day_of_week", "month"], "is_holiday + day_of_week + month"),
         ]
         results = []
         for features, label in feature_sets:
@@ -84,9 +86,9 @@ class SoldEnergyPredictor:
             r2 = r2_score(y_te, y_pred_test)
             results.append((label, mae, rmse, r2))
         print("\nPorównanie skuteczności modeli:")
-        print(f"{'Cechy':<25} {'MAE':<10} {'RMSE':<10} {'R2':<10}")
+        print(f"{'Cechy':<35} {'MAE':<10} {'RMSE':<10} {'R2':<10}")
         for label, mae, rmse, r2 in results:
-            print(f"{label:<25} {mae:<10.2f} {rmse:<10.2f} {r2:<10.2f}")
+            print(f"{label:<35} {mae:<10.2f} {rmse:<10.2f} {r2:<10.2f}")
 
     def run(self):
         self.load_data()
