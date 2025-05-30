@@ -53,8 +53,8 @@ if __name__ == "__main__":
     receiver = HistoricalWeatherDataReceiver(
         latitude=49.6887,
         longitude=21.7706,
-        start_date="2025-01-01",
-        end_date="2025-05-24",
+        start_date="2025-05-25",
+        end_date="2025-05-30",
         output_file="data/weather/historical_weather.csv"
     )
     receiver.fetch_and_save()
