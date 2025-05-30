@@ -9,7 +9,7 @@ class SoldEnergyPredictor:
         self.input_path = input_path
         self.output_pred_path = output_pred_path
         self.output_pivot_path = output_pivot_path
-        self.features = ["produced_energy", "hour", "is_holiday"]
+        self.features = ["produced_energy", "hour", "is_holiday", "day_of_week", "month"]
         self.target = "sold_energy"
         self.df = None
         self.model = None
@@ -24,6 +24,7 @@ class SoldEnergyPredictor:
         self.df["date"] = pd.to_datetime(self.df["date"], errors="coerce")
         if self.df["date"].dtype != "O":
             self.df["date"] = self.df["date"].dt.date
+
 
     def train_model(self):
         train_df = self.df[self.df[self.target].notna()]
@@ -62,6 +63,33 @@ class SoldEnergyPredictor:
         pivot_sold.to_excel(self.output_pivot_path, float_format="%.2f")
         print(f"Dane zapisane do {self.output_pivot_path}")
 
+    def test_features_combinations(self):
+        feature_sets = [
+            (["produced_energy", "hour", "is_holiday"], "is_holiday"),
+            (["produced_energy", "hour", "day_of_week"], "day_of_week"),
+            (["produced_energy", "hour", "is_holiday", "day_of_week"], "is_holiday + day_of_week"),
+            (["produced_energy", "hour", "is_holiday", "day_of_week", "month"], "is_holiday + day_of_week + month"),
+        ]
+        results = []
+        for features, label in feature_sets:
+            train_df = self.df[self.df[self.target].notna()]
+            X_train = train_df[features]
+            y_train = train_df[self.target]
+            X_tr, X_te, y_tr, y_te = train_test_split(
+                X_train, y_train, test_size=0.2, random_state=42
+            )
+            model = RandomForestRegressor(n_estimators=100, random_state=42)
+            model.fit(X_tr, y_tr)
+            y_pred_test = model.predict(X_te)
+            mae = mean_absolute_error(y_te, y_pred_test)
+            rmse = np.sqrt(mean_squared_error(y_te, y_pred_test))
+            r2 = r2_score(y_te, y_pred_test)
+            results.append((label, mae, rmse, r2))
+        print("\nPorównanie skuteczności modeli:")
+        print(f"{'Cechy':<35} {'MAE':<10} {'RMSE':<10} {'R2':<10}")
+        for label, mae, rmse, r2 in results:
+            print(f"{label:<35} {mae:<10.2f} {rmse:<10.2f} {r2:<10.2f}")
+
     def run(self):
         self.load_data()
         self.train_model()
@@ -75,4 +103,6 @@ if __name__ == "__main__":
         output_pred_path="data/output/sold_predicted.xlsx",
         output_pivot_path="data/output/sold_pivot.xlsx"
     )
+    predictor.load_data()
+    predictor.test_features_combinations()
     predictor.run()
