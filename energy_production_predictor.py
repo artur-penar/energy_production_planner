@@ -9,7 +9,7 @@ class EnergyProductionPredictor:
         self.input_path = input_path
         self.output_pred_path = output_pred_path
         self.output_pivot_path = output_pivot_path
-        self.features = ["temp", "gti", "cloud", "hour"]
+        self.features = ["temp", "gti", "cloud", "hour", "month"]
         self.target = "produced_energy"
         self.df = None
         self.model = None
@@ -59,6 +59,34 @@ class EnergyProductionPredictor:
         produced_pivot.to_excel(self.output_pivot_path, float_format="%.2f")
         print(f"Dane zapisane do {self.output_pivot_path}")
 
+    def test_features_combinations(self):
+        feature_sets = [
+            (["temp", "gti", "cloud", "hour"], "bez 'month'"),
+            (["temp", "gti", "cloud", "hour", "month"], "z 'month'")
+        ]
+        results = []
+        train_df = self.df[self.df[self.target].notna()]
+        for features, label in feature_sets:
+            X_train = train_df[features]
+            y_train = train_df[self.target]
+            X_tr, X_te, y_tr, y_te = train_test_split(X_train, y_train, test_size=0.2, random_state=42)
+            model = RandomForestRegressor(n_estimators=100, random_state=42)
+            model.fit(X_tr, y_tr)
+            y_pred_test = model.predict(X_te)
+            mae = mean_absolute_error(y_te, y_pred_test)
+            rmse = np.sqrt(mean_squared_error(y_te, y_pred_test))
+            r2 = r2_score(y_te, y_pred_test)
+            results.append((label, mae, rmse, r2))
+        print("\nPorównanie skuteczności modeli:")
+        print(f"{'Cechy':<15} {'MAE':<10} {'RMSE':<10} {'R2':<10}")
+        for label, mae, rmse, r2 in results:
+            print(f"{label:<15} {mae:<10.2f} {rmse:<10.2f} {r2:<10.2f}")
+
+    def test(self):
+        """Porównuje skuteczność modelu bez oraz z cechą 'month'."""
+        self.load_data()
+        self.test_features_combinations()
+
     def run(self):
         self.load_data()
         self.train_model()
@@ -70,6 +98,6 @@ if __name__ == "__main__":
     predictor = EnergyProductionPredictor(
         input_path="data/input/production_to_predict.xlsx",
         output_pred_path="data/input/pv_predicted.xlsx",
-        output_pivot_path="data/output/pv_pivot.xlsx"
+        output_pivot_path="data/output/pv_pivot2.xlsx"
     )
     predictor.run()
