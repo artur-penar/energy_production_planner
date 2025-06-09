@@ -14,7 +14,13 @@ class HistoricalWeatherDataReceiver:
         self.retry_session = retry(self.cache_session, retries=5, backoff_factor=0.2)
         self.openmeteo = openmeteo_requests.Client(session=self.retry_session)
 
-    def fetch_and_save(self):
+    def print_api_metadata(self, response):
+        print(f"Coordinates {response.Latitude()}°N {response.Longitude()}°E")
+        print(f"Elevation {response.Elevation()} m asl")
+        print(f"Timezone {response.Timezone()}{response.TimezoneAbbreviation()}")
+        print(f"Timezone difference to GMT+0 {response.UtcOffsetSeconds()} s")
+
+    def fetch_historical_data(self):
         url = "https://archive-api.open-meteo.com/v1/archive"
         params = {
             "latitude": self.latitude,
@@ -25,36 +31,53 @@ class HistoricalWeatherDataReceiver:
         }
         responses = self.openmeteo.weather_api(url, params=params)
         response = responses[0]
-        print(f"Coordinates {response.Latitude()}°N {response.Longitude()}°E")
-        print(f"Elevation {response.Elevation()} m asl")
-        print(f"Timezone {response.Timezone()}{response.TimezoneAbbreviation()}")
-        print(f"Timezone difference to GMT+0 {response.UtcOffsetSeconds()} s")
+        self.print_api_metadata(response)
 
         hourly = response.Hourly()
         hourly_temperature_2m = hourly.Variables(0).ValuesAsNumpy()
         hourly_cloud_cover = hourly.Variables(1).ValuesAsNumpy()
-        hourly_global_tilted_irradiance_instant = hourly.Variables(2).ValuesAsNumpy()
+        hourly_global_tilted_irradiance = hourly.Variables(2).ValuesAsNumpy()
 
-        hourly_data = {"date": pd.date_range(
-            start=pd.to_datetime(hourly.Time(), unit="s", utc=True),
-            end=pd.to_datetime(hourly.TimeEnd(), unit="s", utc=True),
-            freq=pd.Timedelta(seconds=hourly.Interval()),
-            inclusive="left"
-        )}
-        hourly_data["temperature_2m"] = hourly_temperature_2m
-        hourly_data["cloud_cover"] = hourly_cloud_cover
-        hourly_data["global_tilted_irradiance_instant"] = hourly_global_tilted_irradiance_instant
+        hourly_data = {
+            "date": pd.date_range(
+                start=pd.to_datetime(hourly.Time(), unit="s", utc=True),
+                end=pd.to_datetime(hourly.TimeEnd(), unit="s", utc=True),
+                freq=pd.Timedelta(seconds=hourly.Interval()),
+                inclusive="left"
+            ),
+            "temperature_2m": hourly_temperature_2m,
+            "cloud_cover": hourly_cloud_cover,
+            "global_tilted_irradiance": hourly_global_tilted_irradiance  # Ujednolicona nazwa
+        }
+        df = pd.DataFrame(data=hourly_data)
+        if pd.api.types.is_datetime64_any_dtype(df["date"]):
+            df["date"] = df["date"].dt.tz_localize(None)
+        return df
 
-        hourly_dataframe = pd.DataFrame(data=hourly_data)
-        hourly_dataframe.to_csv(self.output_file, index=False)
-        print(f"Data saved to {self.output_file}")
+    def save_to_excel(self, df, excel_path):
+        df.to_excel(excel_path, index=False)
+        print(f"Data saved to {excel_path}")
+
+    def save_to_csv(self, df, csv_path):
+        df.to_csv(csv_path, index=False)
+        print(f"Data saved to {csv_path}")
+
+    def display(self, df, n=5):
+        print(df.head(n))
+
+    def run(self, save_excel_path=None):
+        df = self.fetch_historical_data()
+        self.save_to_csv(df, self.output_file)
+        if save_excel_path:
+            self.save_to_excel(df, save_excel_path)
+        self.display(df)
 
 if __name__ == "__main__":
     receiver = HistoricalWeatherDataReceiver(
         latitude=49.6887,
         longitude=21.7706,
-        start_date="2025-05-25",
-        end_date="2025-05-30",
+        start_date="2025-06-05",
+        end_date="2025-06-09",
         output_file="data/weather/historical_weather.csv"
     )
-    receiver.fetch_and_save()
+    receiver.run(save_excel_path="data/weather/historical_weather.xlsx")
