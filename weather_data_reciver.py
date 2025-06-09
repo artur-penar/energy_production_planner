@@ -2,6 +2,7 @@ import openmeteo_requests
 import pandas as pd
 import requests_cache
 from retry_requests import retry
+from db_manager import DBManager  # Zakładam, że masz plik db_manager.py z klasą DBManager
 
 
 class ForecastWeatherDataReceiver:
@@ -78,8 +79,13 @@ if __name__ == "__main__":
     receiver = ForecastWeatherDataReceiver(
         latitude=49.6887,
         longitude=21.7706,
-        output_file="data/weather/forecast_weather.xlsx",
+        output_file="data/weather/forecast_weather.xlsx",  # Możesz pominąć eksport do pliku, to tylko placeholder
         past_days=1,
         forecast_days=4,
     )
     receiver.run()
+
+    db_manager = DBManager("postgresql+psycopg2://postgres:postgres@localhost:5432/energy_prediction")
+
+    # Wstaw dane do bazy
+    db_manager.import_predicted_weather_from_api(receiver)
