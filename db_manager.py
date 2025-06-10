@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine, text
 import pandas as pd
+import holidays
 
 class DBManager:
     def __init__(self, db_url):
@@ -35,8 +36,16 @@ class DBManager:
         sold_df['type'] = type_value
         sold_df['object_id'] = object_id
 
-        # Wstaw do tabel weather, pv_production, sold_energy
-        weather_df.to_sql("weather", self.engine, if_exists='append', index=False)
+        # Wstaw do tabeli weather z ON CONFLICT DO NOTHING
+        with self.engine.begin() as conn:
+            for _, row in weather_df.iterrows():
+                conn.execute(text("""
+                    INSERT INTO weather (date, hour, temp, cloud, gti, type)
+                    VALUES (:date, :hour, :temp, :cloud, :gti, :type)
+                    ON CONFLICT (date, hour, type) DO NOTHING
+                """), row.to_dict())
+
+        # Pozostałe tabele mogą być przez to_sql
         pv_df.to_sql("pv_production", self.engine, if_exists='append', index=False)
         sold_df.to_sql("sold_energy", self.engine, if_exists='append', index=False)
 
@@ -47,38 +56,99 @@ class DBManager:
         """
         Pobiera dane pogodowe (prognozowane) za pomocą obiektu ForecastWeatherDataReceiver
         i zapisuje je do tabeli weather w bazie danych z kolumną 'type' = 'predicted'.
+        Nadpisuje istniejące wpisy (ON CONFLICT DO UPDATE) w kolumnach temp, cloud, gti.
         """
         # 1. Pobierz DataFrame z API
         df = forecast_receiver.fetch_forecast_data()
 
-        # 2. Dopasuj nazwy kolumn z ForecastWeatherDataReceiver do tabeli weather
-        #    (np. temperature_2m -> temp, cloud_cover -> cloud, global_tilted_irradiance -> gti)
+        # 2. Dopasuj nazwy kolumn
         df = df.rename(columns={
             "temperature_2m": "temp",
             "cloud_cover": "cloud",
             "global_tilted_irradiance": "gti"
         })
 
-        # 3. Dodaj kolumnę 'hour' z daty (o ile potrzebujesz jej do klucza unikalnego w bazie)
+        # 3. Dodaj kolumnę 'hour' i zredukuj kolumnę 'date' do dnia
         df['hour'] = df['date'].dt.hour
-
-        # 4. Data w kolumnie 'date' – tylko część dzienna bez godzin
         df['date'] = df['date'].dt.date
 
-        # 5. Oznacz dane jako predicted 
+        # 4. Oznacz dane jako predicted
         df['type'] = 'predicted'
 
-        # 6. Wstaw do tabeli weather
-        #    Zwróć uwagę, że kolumny w DF muszą odpowiadać kolumnom w tabeli weather (date, hour, temp, cloud, gti, type)
+        # 5. Przepisz kolumny do nowego DataFrame (lub bezpośrednio iteruj po df)
         cols_to_insert = ['date', 'hour', 'temp', 'cloud', 'gti', 'type']
         weather_df = df[cols_to_insert].dropna(subset=['temp', 'cloud', 'gti'])
 
-        weather_df.to_sql("weather", self.engine, if_exists='append', index=False)
+        # 6. Użyj surowego zapytania INSERT ... ON CONFLICT DO UPDATE
+        with self.engine.begin() as conn:
+            for _, row in weather_df.iterrows():
+                conn.execute(text("""
+                    INSERT INTO weather (date, hour, temp, cloud, gti, type)
+                    VALUES (:date, :hour, :temp, :cloud, :gti, :type)
+                    ON CONFLICT (date, hour, type)
+                    DO UPDATE SET
+                        temp = EXCLUDED.temp,
+                        cloud = EXCLUDED.cloud,
+                        gti = EXCLUDED.gti
+                """), row.to_dict())
 
-        print(f"Wstawiono {len(weather_df)} rekordów prognozy (type='predicted') do tabeli weather.")
+        print(f"Wstawiono lub zaktualizowano {len(weather_df)} rekordów prognozy (type='predicted') w tabeli weather.")
+
+    def get_training_data(self):
+        """
+        Zwraca DataFrame z danymi do nauki modelu (łącząc dane pogodowe i produkcję).
+        """
+        query = text("""
+            SELECT
+                p.date,
+                p.hour,
+                w.temp,
+                w.cloud,
+                w.gti,
+                p.produced_energy
+            FROM pv_production p
+            JOIN weather w
+              ON p.date = w.date AND p.hour = w.hour AND w.type = 'real'
+            WHERE p.produced_energy IS NOT NULL
+        """)
+        df = pd.read_sql(query, self.engine)
+        df["date"] = pd.to_datetime(df["date"])
+        df["month"] = df["date"].dt.month
+        df["date"] = df["date"].dt.date
+        return df
+
+    def get_sold_energy_training_data(self):
+        """
+        Zwraca DataFrame z danymi do nauki modelu dla energii oddanej (sold_energy),
+        wyliczając cechy month, day_of_week, is_holiday.
+        """
+        query = text("""
+            SELECT
+                s.date,
+                s.hour,
+                p.produced_energy,
+                s.sold_energy
+            FROM sold_energy s
+            JOIN pv_production p
+              ON s.date = p.date AND s.hour = p.hour
+            WHERE s.sold_energy IS NOT NULL
+        """)
+        df = pd.read_sql(query, self.engine)
+        df["date"] = pd.to_datetime(df["date"])
+        df["month"] = df["date"].dt.month
+        df["day_of_week"] = df["date"].dt.weekday  # 0=poniedziałek, 6=niedziela
+
+        import holidays
+        pl_holidays = holidays.Poland()
+        df["is_holiday"] = df["date"].isin(pl_holidays).astype(int)
+
+        df["date"] = df["date"].dt.date  # jeśli chcesz mieć datę bez czasu
+        return df
 
 if __name__ == "__main__":
     db = DBManager("postgresql+psycopg2://postgres:postgres@localhost:5432/energy_prediction")
-    db.clear_and_reset_tables()
-    excel_path = r"C:\Users\Użytkownik1\Desktop\python_scripts\energy_production_planner\data\input\historical_data.xlsx"
-    db.import_from_excel_to_two_tables(excel_path, object_id=1, type_value="real")
+    # db.clear_and_reset_tables()
+    # excel_path = r"C:\Users\Użytkownik1\Desktop\python_scripts\energy_production_planner\data\input\historical_data.xlsx"
+    # db.import_from_excel_to_two_tables(excel_path, object_id=1, type_value="real")
+    # print(db.get_training_data())
+    print(db.get_sold_energy_training_data())
