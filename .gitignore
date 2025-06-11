@@ -3,3 +3,4 @@
 *.csv
 *.sql
 .cache.sqlite
+*.pyc
