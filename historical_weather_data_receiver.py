@@ -76,8 +76,8 @@ if __name__ == "__main__":
     receiver = HistoricalWeatherDataReceiver(
         latitude=49.6887,
         longitude=21.7706,
-        start_date="2025-06-05",
-        end_date="2025-06-09",
+        start_date="2025-06-08",
+        end_date="2025-06-11",
         output_file="data/weather/historical_weather.csv"
     )
     receiver.run(save_excel_path="data/weather/historical_weather.xlsx")
