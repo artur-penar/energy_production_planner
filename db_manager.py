@@ -1,6 +1,5 @@
-from sqlalchemy import create_engine, text
 import pandas as pd
-import holidays
+from sqlalchemy import create_engine, text
 
 
 class DBManager:
@@ -99,57 +98,6 @@ class DBManager:
             f"{len(pv_df)} do pv_production i {len(sold_df)} do sold_energy."
         )
 
-    def import_predicted_weather_from_api(self, forecast_receiver):
-        """
-        Pobiera dane pogodowe (prognozowane) za pomocą obiektu ForecastWeatherDataReceiver
-        i zapisuje je do tabeli weather w bazie danych z kolumną 'type' = 'predicted'.
-        Nadpisuje istniejące wpisy (ON CONFLICT DO UPDATE) w kolumnach temp, cloud, gti.
-        """
-        # 1. Pobierz DataFrame z API
-        df = forecast_receiver.fetch_forecast_data()
-
-        # 2. Dopasuj nazwy kolumn
-        df = df.rename(
-            columns={
-                "temperature_2m": "temp",
-                "cloud_cover": "cloud",
-                "global_tilted_irradiance": "gti",
-            }
-        )
-
-        # 3. Dodaj kolumnę 'hour' i zredukuj kolumnę 'date' do dnia
-        df["hour"] = df["date"].dt.hour
-        df["date"] = df["date"].dt.date
-
-        # 4. Oznacz dane jako predicted
-        df["type"] = "predicted"
-
-        # 5. Przepisz kolumny do nowego DataFrame (lub bezpośrednio iteruj po df)
-        cols_to_insert = ["date", "hour", "temp", "cloud", "gti", "type"]
-        weather_df = df[cols_to_insert].dropna(subset=["temp", "cloud", "gti"])
-
-        # 6. Użyj surowego zapytania INSERT ... ON CONFLICT DO UPDATE
-        with self.engine.begin() as conn:
-            for _, row in weather_df.iterrows():
-                conn.execute(
-                    text(
-                        """
-                    INSERT INTO weather (date, hour, temp, cloud, gti, type)
-                    VALUES (:date, :hour, :temp, :cloud, :gti, :type)
-                    ON CONFLICT (date, hour, type)
-                    DO UPDATE SET
-                        temp = EXCLUDED.temp,
-                        cloud = EXCLUDED.cloud,
-                        gti = EXCLUDED.gti
-                """
-                    ),
-                    row.to_dict(),
-                )
-
-        print(
-            f"Wstawiono lub zaktualizowano {len(weather_df)} rekordów prognozy (type='predicted') w tabeli weather."
-        )
-
     def get_pv_production_training_data(self):
         """
         Zwraca DataFrame z danymi do nauki modelu (łącząc dane pogodowe i produkcję).
@@ -205,6 +153,47 @@ class DBManager:
 
         df["date"] = df["date"].dt.date  # jeśli chcesz mieć datę bez czasu
         return df
+
+    def save_weather_data(self, df, type_value="real"):
+        """
+        Zapisuje dane pogodowe z DataFrame do tabeli weather w bazie danych.
+        Zakłada, że df ma kolumny: date, hour, temp, cloud, gti (nazwy zgodne z bazą).
+        Wstawia lub aktualizuje rekordy według klucza (date, hour, type).
+        """
+        # Upewnij się, że kolumny są odpowiednio nazwane
+        df = df.rename(
+            columns={
+                "temperature_2m": "temp",
+                "cloud_cover": "cloud",
+                "global_tilted_irradiance": "gti",
+                "global_tilted_irradiance_instant": "gti",
+            }
+        )
+        df = df.copy()
+        df["hour"] = pd.to_datetime(df["date"]).dt.hour
+        df["date"] = pd.to_datetime(df["date"]).dt.date
+        df["type"] = type_value
+        cols_to_insert = ["date", "hour", "temp", "cloud", "gti", "type"]
+        weather_df = df[cols_to_insert].dropna(subset=["temp", "cloud", "gti"])
+        with self.engine.begin() as conn:
+            for _, row in weather_df.iterrows():
+                conn.execute(
+                    text(
+                        """
+                        INSERT INTO weather (date, hour, temp, cloud, gti, type)
+                        VALUES (:date, :hour, :temp, :cloud, :gti, :type)
+                        ON CONFLICT (date, hour, type)
+                        DO UPDATE SET
+                            temp = EXCLUDED.temp,
+                            cloud = EXCLUDED.cloud,
+                            gti = EXCLUDED.gti
+                        """
+                    ),
+                    row.to_dict(),
+                )
+        print(
+            f"Wstawiono lub zaktualizowano {len(weather_df)} rekordów do tabeli weather."
+        )
 
 
 if __name__ == "__main__":
