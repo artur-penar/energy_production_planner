@@ -1,10 +1,26 @@
 import pandas as pd
 from sqlalchemy import create_engine, text
-
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import Table, MetaData
 
 class DBManager:
     def __init__(self, db_url):
         self.engine = create_engine(db_url)
+
+    def get_latest_pv_production_date(self, type_value="real"):
+        """
+        Zwraca ostatnią datę z tabeli pv_production, gdzie type='real'.
+        """
+        query = text(
+            """
+            SELECT MAX(date) AS last_real_date
+            FROM pv_production
+            WHERE type = :type_value 
+        """
+        )
+        with self.engine.connect() as conn:
+            result = conn.execute(query, {"type_value": type_value}).fetchone()
+        return result[0] if result else None
 
     def get_latest_weather_date(self, type_value="real"):
         """
@@ -52,50 +68,63 @@ class DBManager:
             "Tabele pv_production i sold_energy zostały wyczyszczone, liczniki id zresetowane."
         )
 
-    def import_from_excel_to_two_tables(self, excel_path, object_id, type_value="real"):
-        # Wczytaj dane z Excela
+    def _read_and_prepare_excel_data(self, excel_path):
         df = pd.read_excel(excel_path)
         df.columns = df.columns.str.strip()
         df["date"] = pd.to_datetime(df["date"], dayfirst=True).dt.date
+        return df
 
-        # Przygotuj dane pogodowe
-        weather_cols = ["date", "hour", "temp", "cloud", "gti"]
-        weather_df = df[weather_cols].copy().dropna(subset=["temp", "cloud", "gti"])
-        weather_df["type"] = type_value  # lub inna wybrana wartość
+    def _filter_new_data(self, df, latest_date):
+        if latest_date:
+            return df[df["date"] > latest_date]
+        return df
 
-        # Przygotuj dane do pv_production
-        pv_df = df[["date", "hour", "produced_energy"]].copy()
-        pv_df = pv_df.dropna(subset=["produced_energy"])
-        pv_df["type"] = type_value
-        pv_df["object_id"] = object_id
+    def _prepare_pv_production_df(self, df, object_id, type_value):
+        pv_cols = ["date", "hour", "produced_energy"]
+        return (
+            df[pv_cols]
+            .dropna(subset=["produced_energy"])
+            .assign(type=type_value, object_id=object_id)
+        )
 
-        # Przygotuj dane do sold_energy
-        sold_df = df[["date", "hour", "sold_energy"]].copy()
-        sold_df = sold_df.dropna(subset=["sold_energy"])
-        sold_df["type"] = type_value
-        sold_df["object_id"] = object_id
+    def _prepare_sold_energy_df(self, df, object_id, type_value):
+        sold_cols = ["date", "hour", "sold_energy"]
+        return (
+            df[sold_cols]
+            .dropna(subset=["sold_energy"])
+            .assign(type=type_value, object_id=object_id)
+        )
 
-        # Wstaw do tabeli weather z ON CONFLICT DO NOTHING
+    def _insert_ignore_duplicates(self, table_name, data_df, unique_cols):
+        if data_df.empty:
+            return
+        meta = MetaData()
+        table = Table(table_name, meta, autoload_with=self.engine)
+        stmt = (
+            insert(table)
+            .values(data_df.to_dict(orient="records"))
+            .on_conflict_do_nothing(index_elements=unique_cols)
+        )
         with self.engine.begin() as conn:
-            for _, row in weather_df.iterrows():
-                conn.execute(
-                    text(
-                        """
-                    INSERT INTO weather (date, hour, temp, cloud, gti, type)
-                    VALUES (:date, :hour, :temp, :cloud, :gti, :type)
-                    ON CONFLICT (date, hour, type) DO NOTHING
-                """
-                    ),
-                    row.to_dict(),
-                )
+            conn.execute(stmt)
 
-        # Pozostałe tabele mogą być przez to_sql
-        pv_df.to_sql("pv_production", self.engine, if_exists="append", index=False)
-        sold_df.to_sql("sold_energy", self.engine, if_exists="append", index=False)
-
+    def import_from_excel_to_two_tables(self, excel_path, object_id, type_value="real"):
+        """
+        Importuje dane z pliku Excel do tabel pv_production i sold_energy.
+        Pomija duplikaty na podstawie (date, hour, type, object_id).
+        """
+        df = self._read_and_prepare_excel_data(excel_path)
+        latest_date = self.get_latest_pv_production_date(type_value=type_value)
+        print(f"Ostatnia data w bazie dla {type_value}: {latest_date}")
+        df = self._filter_new_data(df, latest_date)
+        pv_df = self._prepare_pv_production_df(df, object_id, type_value)
+        sold_df = self._prepare_sold_energy_df(df, object_id, type_value)
+        self._insert_ignore_duplicates("pv_production", pv_df, ["date", "hour", "type", "object_id"])
+        self._insert_ignore_duplicates("sold_energy", sold_df, ["date", "hour", "type", "object_id"])
+        print("Przykładowe dane pv_production:\n", pv_df.head())
+        print("Przykładowe dane sold_energy:\n", sold_df.head())
         print(
-            f"Wstawiono {len(weather_df)} rekordów do weather, "
-            f"{len(pv_df)} do pv_production i {len(sold_df)} do sold_energy."
+            f"Wstawiono {len(pv_df)} do pv_production i {len(sold_df)} do sold_energy. (duplikaty pominięte)"
         )
 
     def get_pv_production_training_data(self):
