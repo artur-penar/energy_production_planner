@@ -17,12 +17,16 @@ class EnergyProductionPredictor:
         self.rmse = None
         self.r2 = None
 
-    def load_data(self):
+    def load_data_from_excel(self):
         self.df = pd.read_excel(self.input_path)
         self.df.columns = self.df.columns.str.strip()
         print(self.df.columns.tolist())
         self.df["date"] = pd.to_datetime(self.df["date"], format="%d.%m.%Y")
         self.df["date"] = self.df["date"].dt.date
+
+    def load_data(self, df):
+        self.df = df.copy()
+    
 
     def train_model(self):
         train_df = self.df[self.df[self.target].notna()]
@@ -84,11 +88,11 @@ class EnergyProductionPredictor:
 
     def test(self):
         """Porównuje skuteczność modelu bez oraz z cechą 'month'."""
-        self.load_data()
+        self.load_data_from_excel()
         self.test_features_combinations()
 
     def run(self):
-        self.load_data()
+        self.load_data_from_excel()
         self.train_model()
         self.predict_missing()
         self.save_predictions()
