@@ -85,7 +85,4 @@ if __name__ == "__main__":
     )
     receiver.run()
 
-    db_manager = DBManager("postgresql+psycopg2://postgres:postgres@localhost:5432/energy_prediction")
 
-    # Wstaw dane do bazy
-    db_manager.import_predicted_weather_from_api(receiver)
