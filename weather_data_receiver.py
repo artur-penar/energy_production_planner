@@ -2,7 +2,9 @@ import openmeteo_requests
 import pandas as pd
 import requests_cache
 from retry_requests import retry
-from db_manager import DBManager  # Zakładam, że masz plik db_manager.py z klasą DBManager
+from db_manager import (
+    DBManager,
+)  # Zakładam, że masz plik db_manager.py z klasą DBManager
 
 
 class ForecastWeatherDataReceiver:
@@ -63,6 +65,20 @@ class ForecastWeatherDataReceiver:
             df["date"] = df["date"].dt.tz_localize(None)
         return df
 
+    def filter_complete_days(self, df):
+        """
+        Zwraca DataFrame zawierający tylko te daty, które mają kompletne dane pogodowe (24 godziny: 0-23) i brak NaN.
+        """
+        df["date_only"] = pd.to_datetime(df["date"]).dt.date
+
+        def is_complete_and_no_nan(x):
+            return (
+                set(x["date"].dt.hour) == set(range(24)) and not x.isnull().any().any()
+            )
+
+        complete_days = df.groupby("date_only").filter(is_complete_and_no_nan)
+        return complete_days.drop(columns=["date_only"])
+
     def save_to_excel(self, df, excel_path):
         df.to_excel(excel_path, index=False)
         print(f"Data saved to {excel_path}")
@@ -84,5 +100,3 @@ if __name__ == "__main__":
         forecast_days=4,
     )
     receiver.run()
-
-
