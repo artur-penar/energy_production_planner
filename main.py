@@ -1,5 +1,5 @@
-import pandas as pd
 import logging
+import pandas as pd
 from db_manager import DBManager
 from historical_weather_data_receiver import HistoricalWeatherDataReceiver
 from weather_data_receiver import ForecastWeatherDataReceiver
@@ -48,6 +48,7 @@ if __name__ == "__main__":
         start_date=last_date,
         end_date=today,
     )
+
     forecast_receiver = ForecastWeatherDataReceiver(
         latitude=LATITUDE,
         longitude=LONGITUDE,
@@ -70,8 +71,18 @@ if __name__ == "__main__":
         output_pivot_path="data/output/pv_pivot.xlsx",
     )
 
-    excel_path = r"C:\Users\Użytkownik1\Desktop\python_scripts\energy_production_planner\data\input\production_to_predict.xlsx"
-    db.import_from_excel_to_two_tables(excel_path, object_id=1, type_value="real")
+    sold_energy_predictor = EnergyProductionPredictor(
+        input_path="data/input/pv_predicted.xlsx",
+        output_pred_path="data/output/sold_predicted.xlsx",
+        output_pivot_path="data/output/sold_pivot.xlsx",
+    )
 
-    # energy_production_training_data = db.get_pv_production_training_data()
-    # print(energy_production_training_data)
+    excel_path = r"C:\Users\Użytkownik1\Desktop\python_scripts\energy_production_planner\data\input\production_to_predict.xlsx"
+    db.import_data_from_excel(excel_path, object_id=1, type_value="real")
+
+    energy_production_training_data = db.get_pv_production_training_data()
+    energy_predictor.load_data(energy_production_training_data)
+    energy_predictor.train_model()
+
+
+
