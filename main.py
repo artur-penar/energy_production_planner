@@ -4,6 +4,7 @@ from db_manager import DBManager
 from historical_weather_data_receiver import HistoricalWeatherDataReceiver
 from weather_data_receiver import ForecastWeatherDataReceiver
 from energy_production_predictor import EnergyProductionPredictor
+from sold_energy_predictor import SoldEnergyPredictor
 
 logging.basicConfig(level=logging.INFO)
 
@@ -57,6 +58,10 @@ if __name__ == "__main__":
         forecast_days=4,
     )
 
+    historical_weather = historical_receiver.fetch_historical_data()
+    print("Historical Weather Data:")
+    print(historical_weather)
+
     # save_weather(
     #     historical_receiver, historical_receiver.fetch_historical_data, db, "real"
     # )
@@ -71,18 +76,36 @@ if __name__ == "__main__":
         output_pivot_path="data/output/pv_pivot.xlsx",
     )
 
-    sold_energy_predictor = EnergyProductionPredictor(
+    sold_energy_predictor = SoldEnergyPredictor(
         input_path="data/input/pv_predicted.xlsx",
         output_pred_path="data/output/sold_predicted.xlsx",
         output_pivot_path="data/output/sold_pivot.xlsx",
     )
 
     excel_path = r"C:\Users\Użytkownik1\Desktop\python_scripts\energy_production_planner\data\input\production_to_predict.xlsx"
-    db.import_data_from_excel(excel_path, object_id=1, type_value="real")
+    # db.import_data_from_excel(excel_path, object_id=1, type_value="real")
 
     energy_production_training_data = db.get_pv_production_training_data()
     energy_predictor.load_data(energy_production_training_data)
     energy_predictor.train_model()
+    energy_predictor.predict_missing()
+    print("Energy Production predictions:")
+    print(energy_predictor.df)
+
+    sold_energy_training_data = db.get_sold_energy_training_data()
+
+    print("Sold Energy Training Data:")
+    print(sold_energy_training_data)
+
+    # Zapisz dane do pliku Excel
+    sold_energy_training_data.to_excel("data/output/sold_energy_training_data.xlsx", index=False)
+    print("Sold energy training data saved to data/output/sold_energy_training_data.xlsx")
+
+    sold_energy_predictor.load_data(sold_energy_training_data)
+    sold_energy_predictor.test_features_combinations()
+    sold_energy_predictor.train_model()
+
+
 
 
 
