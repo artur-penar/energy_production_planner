@@ -181,8 +181,13 @@ class DBManager:
         df["month"] = df["date"].dt.month
         df["day_of_week"] = df["date"].dt.weekday  # 0=poniedziałek, 6=niedziela
 
-        pl_holidays = holidays.Poland()
-        df["is_holiday"] = df["date"].isin(pl_holidays).astype(int)
+        pl_holidays = holidays.Poland(years=df["date"].dt.year.unique())
+        print(f"Znaleziono {len(pl_holidays)} świąt w latach: {df['date'].dt.year.unique()}")
+        print(f"Święta: {pl_holidays}")
+        # is_holiday: 1 jeśli święto lub niedziela, 0 w przeciwnym razie
+        df["is_holiday"] = (
+            df["date"].isin(pl_holidays) | (df["day_of_week"] == 6)
+        ).astype(int)
 
         df["date"] = df["date"].dt.date  # jeśli chcesz mieć datę bez czasu
         return df
