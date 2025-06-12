@@ -1,7 +1,9 @@
+import holidays
 import pandas as pd
+from sqlalchemy import Table, MetaData
 from sqlalchemy import create_engine, text
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy import Table, MetaData
+
 
 class DBManager:
     def __init__(self, db_url):
@@ -108,7 +110,7 @@ class DBManager:
         with self.engine.begin() as conn:
             conn.execute(stmt)
 
-    def import_from_excel_to_two_tables(self, excel_path, object_id, type_value="real"):
+    def import_data_from_excel(self, excel_path, object_id, type_value="real"):
         """
         Importuje dane z pliku Excel do tabel pv_production i sold_energy.
         Pomija duplikaty na podstawie (date, hour, type, object_id).
@@ -119,8 +121,12 @@ class DBManager:
         df = self._filter_new_data(df, latest_date)
         pv_df = self._prepare_pv_production_df(df, object_id, type_value)
         sold_df = self._prepare_sold_energy_df(df, object_id, type_value)
-        self._insert_ignore_duplicates("pv_production", pv_df, ["date", "hour", "type", "object_id"])
-        self._insert_ignore_duplicates("sold_energy", sold_df, ["date", "hour", "type", "object_id"])
+        self._insert_ignore_duplicates(
+            "pv_production", pv_df, ["date", "hour", "type", "object_id"]
+        )
+        self._insert_ignore_duplicates(
+            "sold_energy", sold_df, ["date", "hour", "type", "object_id"]
+        )
         print("Przykładowe dane pv_production:\n", pv_df.head())
         print("Przykładowe dane sold_energy:\n", sold_df.head())
         print(
@@ -174,8 +180,6 @@ class DBManager:
         df["date"] = pd.to_datetime(df["date"])
         df["month"] = df["date"].dt.month
         df["day_of_week"] = df["date"].dt.weekday  # 0=poniedziałek, 6=niedziela
-
-        import holidays
 
         pl_holidays = holidays.Poland()
         df["is_holiday"] = df["date"].isin(pl_holidays).astype(int)
