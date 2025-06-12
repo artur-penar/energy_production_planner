@@ -17,7 +17,10 @@ class SoldEnergyPredictor:
         self.rmse = None
         self.r2 = None
 
-    def load_data(self):
+    def load_data(self, df):
+        self.df = df.copy()
+
+    def load_data_from_excel(self):
         self.df = pd.read_excel(self.input_path)
         self.df.columns = self.df.columns.str.strip()
         print(self.df.columns.tolist())
@@ -91,7 +94,7 @@ class SoldEnergyPredictor:
             print(f"{label:<35} {mae:<10.2f} {rmse:<10.2f} {r2:<10.2f}")
 
     def run(self):
-        self.load_data()
+        self.load_data_from_excel()
         self.train_model()
         self.predict_missing()
         self.save_predictions()
@@ -103,6 +106,6 @@ if __name__ == "__main__":
         output_pred_path="data/output/sold_predicted.xlsx",
         output_pivot_path="data/output/sold_pivot.xlsx"
     )
-    predictor.load_data()
+    predictor.load_data_from_excel()
     predictor.test_features_combinations()
     predictor.run()
