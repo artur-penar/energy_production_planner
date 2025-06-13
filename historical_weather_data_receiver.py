@@ -36,7 +36,6 @@ class HistoricalWeatherDataReceiver:
         }
         responses = self.openmeteo.weather_api(url, params=params)
         response = responses[0]
-        self.print_api_metadata(response)
 
         hourly = response.Hourly()
         hourly_temperature_2m = hourly.Variables(0).ValuesAsNumpy()

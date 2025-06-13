@@ -41,7 +41,6 @@ class ForecastWeatherDataReceiver:
         params = self.get_api_params()
         responses = self.openmeteo.weather_api(self.API_URL, params=params)
         response = responses[0]
-        self.print_api_metadata(response)
 
         hourly = response.Hourly()
         hourly_temperature_2m = hourly.Variables(0).ValuesAsNumpy()
