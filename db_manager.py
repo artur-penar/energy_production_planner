@@ -1,5 +1,6 @@
 import holidays
 import pandas as pd
+import datetime
 from sqlalchemy import Table, MetaData
 from sqlalchemy import create_engine, text
 from sqlalchemy.dialects.postgresql import insert
@@ -182,7 +183,9 @@ class DBManager:
         df["day_of_week"] = df["date"].dt.weekday  # 0=poniedziałek, 6=niedziela
 
         pl_holidays = holidays.Poland(years=df["date"].dt.year.unique())
-        print(f"Znaleziono {len(pl_holidays)} świąt w latach: {df['date'].dt.year.unique()}")
+        print(
+            f"Znaleziono {len(pl_holidays)} świąt w latach: {df['date'].dt.year.unique()}"
+        )
         print(f"Święta: {pl_holidays}")
         # is_holiday: 1 jeśli święto lub niedziela, 0 w przeciwnym razie
         df["is_holiday"] = (
@@ -231,6 +234,108 @@ class DBManager:
                 )
         print(
             f"Wstawiono lub zaktualizowano {len(weather_df)} rekordów do tabeli weather."
+        )
+
+    def get_pv_production_prediction_data(self):
+        """
+        Pobiera dane z bazy do predykcji (rekordy z pv_production, gdzie produced_energy jest NULL),
+        łącząc z danymi pogodowymi.
+        """
+        query = text(
+            """
+            SELECT
+                p.date,
+                p.hour,
+                w.temp,
+                w.cloud,
+                w.gti,
+                p.produced_energy,
+                p.type,
+                p.object_id
+            FROM pv_production p
+            JOIN weather w
+              ON p.date = w.date AND p.hour = w.hour AND w.type = 'predicted'
+            WHERE p.produced_energy IS NULL
+            """
+        )
+        df = pd.read_sql(query, self.engine)
+        df["date"] = pd.to_datetime(df["date"])
+        df["month"] = df["date"].dt.month
+        df["date"] = df["date"].dt.date
+        return df
+
+    def update_predicted_produced_energy(self, df):
+        """
+        Aktualizuje kolumnę produced_energy w pv_production na podstawie DataFrame (po predykcji).
+        """
+        with self.engine.begin() as conn:
+            for _, row in df.iterrows():
+                if pd.notna(row["produced_energy"]):
+                    conn.execute(
+                        text(
+                            """
+                            UPDATE pv_production
+                            SET produced_energy = :produced_energy
+                            WHERE date = :date AND hour = :hour AND type = :type AND object_id = :object_id
+                            """
+                        ),
+                        {
+                            "produced_energy": row["produced_energy"],
+                            "date": row["date"],
+                            "hour": row["hour"],
+                            "type": row["type"],
+                            "object_id": row["object_id"],
+                        },
+                    )
+
+    def clear_predicted_rows(self, from_date=None):
+        """
+        Usuwa rekordy typu 'predicted' z obu tabel: pv_production i sold_energy od podanej daty (włącznie).
+        Jeśli from_date nie jest podane, domyślnie czyści od dzisiaj.
+        """
+
+        if from_date is None:
+            from_date = datetime.date.today() + datetime.timedelta(days=1)
+        with self.engine.begin() as conn:
+            conn.execute(
+                text("DELETE FROM pv_production WHERE type = 'predicted' AND date >= :from_date"),
+                {"from_date": from_date},
+            )
+            conn.execute(
+                text("DELETE FROM sold_energy WHERE type = 'predicted' AND date >= :from_date"),
+                {"from_date": from_date},
+            )
+
+    def insert_empty_predicted_rows(self, object_id=1):
+        """
+        Wstawia puste rekordy (NULL) typu 'predicted' do obu tabel: pv_production i sold_energy
+        dla wszystkich dat/godzin z weather typu 'predicted'.
+        """
+        query = text(
+            """
+            SELECT DISTINCT date, hour
+            FROM weather
+            WHERE type = 'predicted'
+            """
+        )
+        df = pd.read_sql(query, self.engine)
+        df["type"] = "predicted"
+        df["object_id"] = object_id
+        # pv_production
+        df_pv = df.copy()
+        df_pv["produced_energy"] = None
+        self._insert_ignore_duplicates(
+            "pv_production",
+            df_pv[["date", "hour", "produced_energy", "type", "object_id"]],
+            ["date", "hour", "type", "object_id"],
+        )
+        # sold_energy
+        df_sold = df.copy()
+        df_sold["sold_energy"] = None
+        self._insert_ignore_duplicates(
+            "sold_energy",
+            df_sold[["date", "hour", "sold_energy", "type", "object_id"]],
+            ["date", "hour", "type", "object_id"],
         )
 
 
