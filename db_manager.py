@@ -1,6 +1,7 @@
+import logging
+import datetime
 import holidays
 import pandas as pd
-import datetime
 from sqlalchemy import Table, MetaData
 from sqlalchemy import create_engine, text
 from sqlalchemy.dialects.postgresql import insert
@@ -9,6 +10,7 @@ from sqlalchemy.dialects.postgresql import insert
 class DBManager:
     def __init__(self, db_url):
         self.engine = create_engine(db_url)
+        self.logger = logging.getLogger(__name__)
 
     def get_latest_pv_production_date(self, type_value="real"):
         """
@@ -67,8 +69,8 @@ class DBManager:
         with self.engine.begin() as conn:
             conn.execute(text("TRUNCATE TABLE pv_production RESTART IDENTITY;"))
             conn.execute(text("TRUNCATE TABLE sold_energy RESTART IDENTITY;"))
-        print(
-            "Tabele pv_production i sold_energy zostały wyczyszczone, liczniki id zresetowane."
+        self.logger.info(
+            "Tabele pv_production i sold_energy zostały wyczyszczone i zresetowane."
         )
 
     def _read_and_prepare_excel_data(self, excel_path):
@@ -118,7 +120,8 @@ class DBManager:
         """
         df = self._read_and_prepare_excel_data(excel_path)
         latest_date = self.get_latest_pv_production_date(type_value=type_value)
-        print(f"Ostatnia data w bazie dla {type_value}: {latest_date}")
+        self.logger.info(f"Ostatnia data w bazie dla {type_value}: {latest_date}")
+
         df = self._filter_new_data(df, latest_date)
         pv_df = self._prepare_pv_production_df(df, object_id, type_value)
         sold_df = self._prepare_sold_energy_df(df, object_id, type_value)
@@ -128,10 +131,8 @@ class DBManager:
         self._insert_ignore_duplicates(
             "sold_energy", sold_df, ["date", "hour", "type", "object_id"]
         )
-        print("Przykładowe dane pv_production:\n", pv_df.head())
-        print("Przykładowe dane sold_energy:\n", sold_df.head())
-        print(
-            f"Wstawiono {len(pv_df)} do pv_production i {len(sold_df)} do sold_energy. (duplikaty pominięte)"
+        self.logger.info(
+            f"Import danych historycznych z pliku excel.\nWstawiono {len(pv_df)} do pv_production i {len(sold_df)} do sold_energy (duplikaty pominięte)"
         )
 
     def get_pv_production_training_data(self):
@@ -183,15 +184,19 @@ class DBManager:
         df["day_of_week"] = df["date"].dt.weekday  # 0=poniedziałek, 6=niedziela
 
         pl_holidays = holidays.Poland(years=df["date"].dt.year.unique())
-        print(
+        self.logger.info(
             f"Znaleziono {len(pl_holidays)} świąt w latach: {df['date'].dt.year.unique()}"
         )
-        print(f"Święta: {pl_holidays}")
         # is_holiday: 1 jeśli święto lub niedziela, 0 w przeciwnym razie
+        pl_holidays_dates = pd.to_datetime(list(pl_holidays)).date
+        df["date"] = pd.to_datetime(df["date"]).dt.date
         df["is_holiday"] = (
-            df["date"].isin(pl_holidays) | (df["day_of_week"] == 6)
+            df["date"].isin(pl_holidays_dates) | (df["day_of_week"] == 6)
         ).astype(int)
 
+        # Upewnij się, że kolumna date jest typu datetime przed użyciem .dt.date
+        if not pd.api.types.is_datetime64_any_dtype(df["date"]):
+            df["date"] = pd.to_datetime(df["date"], errors="coerce")
         df["date"] = df["date"].dt.date  # jeśli chcesz mieć datę bez czasu
         return df
 
@@ -232,7 +237,7 @@ class DBManager:
                     ),
                     row.to_dict(),
                 )
-        print(
+        self.logger.info(
             f"Wstawiono lub zaktualizowano {len(weather_df)} rekordów do tabeli weather."
         )
 
@@ -287,6 +292,34 @@ class DBManager:
                             "object_id": row["object_id"],
                         },
                     )
+            self.logger.info(
+                f"Zaktualizowano {len(df)} rekordów w tabeli pv_production."
+            )
+
+    def update_predicted_sold_energy(self, df):
+        """
+        Aktualizuje kolumnę sold_energy w tabeli sold_energy na podstawie DataFrame (po predykcji).
+        """
+        with self.engine.begin() as conn:
+            for _, row in df.iterrows():
+                if pd.notna(row["sold_energy"]):
+                    conn.execute(
+                        text(
+                            """
+                            UPDATE sold_energy
+                            SET sold_energy = :sold_energy
+                            WHERE date = :date AND hour = :hour AND type = :type AND object_id = :object_id
+                            """
+                        ),
+                        {
+                            "sold_energy": row["sold_energy"],
+                            "date": row["date"],
+                            "hour": row["hour"],
+                            "type": row["type"],
+                            "object_id": row["object_id"],
+                        },
+                    )
+            self.logger.info(f"Zaktualizowano {len(df)} rekordów w tabeli sold_energy.")
 
     def clear_predicted_rows(self, from_date=None):
         """
@@ -298,13 +331,21 @@ class DBManager:
             from_date = datetime.date.today() + datetime.timedelta(days=1)
         with self.engine.begin() as conn:
             conn.execute(
-                text("DELETE FROM pv_production WHERE type = 'predicted' AND date >= :from_date"),
+                text(
+                    "DELETE FROM pv_production WHERE type = 'predicted' AND date >= :from_date"
+                ),
                 {"from_date": from_date},
             )
             conn.execute(
-                text("DELETE FROM sold_energy WHERE type = 'predicted' AND date >= :from_date"),
+                text(
+                    "DELETE FROM sold_energy WHERE type = 'predicted' AND date >= :from_date"
+                ),
                 {"from_date": from_date},
             )
+
+        self.logger.info(
+            f"Usunięto rekordy typu 'predicted' z pv_production i sold_energy od daty {from_date}."
+        )
 
     def insert_empty_predicted_rows(self, object_id=1):
         """
@@ -337,6 +378,42 @@ class DBManager:
             df_sold[["date", "hour", "sold_energy", "type", "object_id"]],
             ["date", "hour", "type", "object_id"],
         )
+        self.logger.info(
+            f"Wstawiono puste rekordy typu 'predicted' do pv_production i sold_energy dla {len(df)} dat/godzin."
+        )
+
+    def get_sold_energy_prediction_data(self):
+        """
+        Pobiera dane z bazy do predykcji (rekordy z sold_energy, gdzie sold_energy jest NULL),
+        łącząc z danymi produkcji PV oraz wylicza cechy wymagane do predykcji.
+        """
+        query = text(
+            """
+            SELECT
+                s.date,
+                s.hour,
+                p.produced_energy,
+                s.sold_energy,
+                s.type,
+                s.object_id
+            FROM sold_energy s
+            JOIN pv_production p
+              ON s.date = p.date AND s.hour = p.hour AND s.type = 'predicted' AND p.type = 'predicted'
+            WHERE s.sold_energy IS NULL
+            """
+        )
+        df = pd.read_sql(query, self.engine)
+        if not df.empty:
+            df["date"] = pd.to_datetime(df["date"])
+            df["month"] = df["date"].dt.month
+            df["day_of_week"] = df["date"].dt.weekday
+
+            pl_holidays = holidays.Poland(years=df["date"].dt.year.unique())
+            df["is_holiday"] = (
+                df["date"].dt.date.isin(pl_holidays) | (df["day_of_week"] == 6)
+            ).astype(int)
+            df["date"] = df["date"].dt.date
+        return df
 
 
 if __name__ == "__main__":
