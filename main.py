@@ -15,11 +15,17 @@ HISTORICAL_FILE = "data/weather/historical_weather.xlsx"
 FORECAST_FILE = "data/weather/forecast_weather.xlsx"
 
 
+def train_predictor(predictor, training_data):
+    predictor.load_data(training_data)
+    predictor.train_model()
+
+
 def predict_and_save_data(predictor, get_prediction_data_func, update_method):
     """Funkcja pomocnicza do przewidywania i aktualizacji danych."""
     prediction_data = get_prediction_data_func()
     predictor.load_data(prediction_data)
     predictor.predict_missing()
+    predictor.save_pivot()
     update_method(predictor.df)
 
 
@@ -36,13 +42,11 @@ def save_weather(receiver, fetch_method, db, data_type):
         logging.error(f"Error saving {data_type} weather data: {e}")
 
 
-def train_predictor(predictor, training_data):
-    predictor.load_data(training_data)
-    predictor.train_model()
-
-
 if __name__ == "__main__":
     db = DBManager(DB_URL)
+    excel_path = r"C:\Users\Użytkownik1\Desktop\python_scripts\energy_production_planner\data\input\production_to_predict.xlsx"
+    db.import_data_from_excel(excel_path, object_id=1, type_value="real")
+
     last_date = db.get_latest_weather_date("real")
     today = pd.Timestamp.now(tz="UTC").normalize().strftime("%Y-%m-%d")
 
@@ -85,9 +89,6 @@ if __name__ == "__main__":
         output_pred_path="data/output/sold_predicted.xlsx",
         output_pivot_path="data/output/sold_pivot.xlsx",
     )
-
-    excel_path = r"C:\Users\Użytkownik1\Desktop\python_scripts\energy_production_planner\data\input\production_to_predict.xlsx"
-    db.import_data_from_excel(excel_path, object_id=1, type_value="real")
 
     energy_production_training_data = db.get_pv_production_training_data()
     train_predictor(energy_predictor, energy_production_training_data)
