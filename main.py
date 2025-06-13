@@ -15,6 +15,14 @@ HISTORICAL_FILE = "data/weather/historical_weather.xlsx"
 FORECAST_FILE = "data/weather/forecast_weather.xlsx"
 
 
+def predict_and_save_data(predictor, get_prediction_data_func, update_method):
+    """Funkcja pomocnicza do przewidywania i aktualizacji danych."""
+    prediction_data = get_prediction_data_func()
+    predictor.load_data(prediction_data)
+    predictor.predict_missing()
+    update_method(predictor.df)
+
+
 def save_weather(receiver, fetch_method, db, data_type):
     try:
         data = receiver.filter_complete_days(fetch_method())
@@ -55,8 +63,8 @@ if __name__ == "__main__":
     )
 
     historical_weather = historical_receiver.fetch_historical_data()
-    print("Historical Weather Data:")
-    print(historical_weather)
+    logging.info("Historical Weather Data:")
+    logging.info("\n%s", historical_weather)
 
     save_weather(
         historical_receiver, historical_receiver.fetch_historical_data, db, "real"
@@ -90,14 +98,13 @@ if __name__ == "__main__":
     db.clear_predicted_rows()
     db.insert_empty_predicted_rows(object_id=1)
 
-    pv_prediction_data = db.get_pv_production_prediction_data()
-    energy_predictor.load_data(pv_prediction_data)
-    energy_predictor.predict_missing()
-    db.update_predicted_produced_energy(energy_predictor.df)
-
-    # Poprawiony workflow dla predykcji sold_energy
-    sold_prediction_data = db.get_sold_energy_prediction_data()
-    sold_energy_predictor.load_data(sold_prediction_data)
-    sold_energy_predictor.predict_missing()
-    db.update_predicted_sold_energy(sold_energy_predictor.df)
-
+    predict_and_save_data(
+        energy_predictor,
+        db.get_pv_production_prediction_data,
+        db.update_predicted_produced_energy,
+    )
+    predict_and_save_data(
+        sold_energy_predictor,
+        db.get_sold_energy_prediction_data,
+        db.update_predicted_sold_energy,
+    )
