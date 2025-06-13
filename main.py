@@ -28,18 +28,14 @@ def save_weather(receiver, fetch_method, db, data_type):
         logging.error(f"Error saving {data_type} weather data: {e}")
 
 
+def train_predictor(predictor, training_data):
+    predictor.load_data(training_data)
+    predictor.train_model()
+
+
 if __name__ == "__main__":
     db = DBManager(DB_URL)
-    try:
-        last_date = db.get_latest_weather_date("real")
-        logging.info(f"Last date in DB: {last_date}")
-        logging.info(
-            f"Is weather day complete: {db.is_weather_day_complete(last_date, 'real')}"
-        )
-    except Exception as e:
-        logging.error(f"Database error: {e}")
-        exit(1)
-
+    last_date = db.get_latest_weather_date("real")
     today = pd.Timestamp.now(tz="UTC").normalize().strftime("%Y-%m-%d")
 
     historical_receiver = HistoricalWeatherDataReceiver(
@@ -62,13 +58,13 @@ if __name__ == "__main__":
     print("Historical Weather Data:")
     print(historical_weather)
 
-    # save_weather(
-    #     historical_receiver, historical_receiver.fetch_historical_data, db, "real"
-    # )
+    save_weather(
+        historical_receiver, historical_receiver.fetch_historical_data, db, "real"
+    )
 
-    # save_weather(
-    #     forecast_receiver, forecast_receiver.fetch_forecast_data, db, "predicted"
-    # )
+    save_weather(
+        forecast_receiver, forecast_receiver.fetch_forecast_data, db, "predicted"
+    )
 
     energy_predictor = EnergyProductionPredictor(
         input_path="data/input/production_to_predict.xlsx",
@@ -83,29 +79,25 @@ if __name__ == "__main__":
     )
 
     excel_path = r"C:\Users\Użytkownik1\Desktop\python_scripts\energy_production_planner\data\input\production_to_predict.xlsx"
-    # db.import_data_from_excel(excel_path, object_id=1, type_value="real")
+    db.import_data_from_excel(excel_path, object_id=1, type_value="real")
 
     energy_production_training_data = db.get_pv_production_training_data()
-    energy_predictor.load_data(energy_production_training_data)
-    energy_predictor.train_model()
-    energy_predictor.predict_missing()
-    print("Energy Production predictions:")
-    print(energy_predictor.df)
+    train_predictor(energy_predictor, energy_production_training_data)
 
     sold_energy_training_data = db.get_sold_energy_training_data()
+    train_predictor(sold_energy_predictor, sold_energy_training_data)
 
-    print("Sold Energy Training Data:")
-    print(sold_energy_training_data)
+    db.clear_predicted_rows()
+    db.insert_empty_predicted_rows(object_id=1)
 
-    # Zapisz dane do pliku Excel
-    sold_energy_training_data.to_excel("data/output/sold_energy_training_data.xlsx", index=False)
-    print("Sold energy training data saved to data/output/sold_energy_training_data.xlsx")
+    pv_prediction_data = db.get_pv_production_prediction_data()
+    energy_predictor.load_data(pv_prediction_data)
+    energy_predictor.predict_missing()
+    db.update_predicted_produced_energy(energy_predictor.df)
 
-    sold_energy_predictor.load_data(sold_energy_training_data)
-    sold_energy_predictor.test_features_combinations()
-    sold_energy_predictor.train_model()
-
-
-
-
+    # Poprawiony workflow dla predykcji sold_energy
+    sold_prediction_data = db.get_sold_energy_prediction_data()
+    sold_energy_predictor.load_data(sold_prediction_data)
+    sold_energy_predictor.predict_missing()
+    db.update_predicted_sold_energy(sold_energy_predictor.df)
 
