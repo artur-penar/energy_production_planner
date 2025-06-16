@@ -14,6 +14,7 @@ class ForecastWeatherDataReceiver:
     def __init__(self, latitude, longitude, output_file, past_days=1, forecast_days=1):
         self.latitude = latitude
         self.longitude = longitude
+        self.timezone = "Europe/Berlin"
         self.output_file = output_file
         self.past_days = past_days
         self.forecast_days = forecast_days
@@ -25,6 +26,7 @@ class ForecastWeatherDataReceiver:
         return {
             "latitude": self.latitude,
             "longitude": self.longitude,
+            "timezone": self.timezone,
             "hourly": self.DEFAULT_HOURLY,
             "past_days": self.past_days,
             "forecast_days": self.forecast_days,
