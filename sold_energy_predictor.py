@@ -99,7 +99,6 @@ class SoldEnergyPredictor:
         self.load_data_from_excel()
         self.train_model()
         self.predict_missing()
-        self.save_predictions()
         self.save_pivot()
 
 if __name__ == "__main__":
