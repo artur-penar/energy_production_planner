@@ -56,11 +56,12 @@ class EnergyProductionPredictor:
         produced_pivot = self.df.pivot_table(
             index="hour", columns="date", values="produced_energy", aggfunc="sum"
         )
+        if produced_pivot.empty or produced_pivot.shape[1] == 0:
+            print("Brak danych do zapisania pivotu - nie utworzono pliku.")
+            return
         produced_pivot.index = produced_pivot.index + 1  # godziny od 1 do 24
         produced_pivot.index.name = "hour"
-        # Uzupełnij NaN na 0, aby suma była zawsze liczona
         produced_pivot = produced_pivot.astype(float).fillna(0)
-        # Dodaj wiersz z sumą na końcu
         produced_pivot.loc['SUMA'] = produced_pivot.sum(numeric_only=True)
         produced_pivot.to_excel(self.output_pivot_path, float_format="%.2f")
         print(f"Dane zapisane do {self.output_pivot_path}")
