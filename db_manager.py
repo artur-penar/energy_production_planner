@@ -174,7 +174,7 @@ class DBManager:
                 s.sold_energy
             FROM sold_energy s
             JOIN pv_production p
-              ON s.date = p.date AND s.hour = p.hour
+              ON s.date = p.date AND s.hour = p.hour AND p.type = 'real'
             WHERE s.sold_energy IS NOT NULL
         """
         )
@@ -221,6 +221,17 @@ class DBManager:
         df["type"] = type_value
         cols_to_insert = ["date", "hour", "temp", "cloud", "gti", "type"]
         weather_df = df[cols_to_insert].dropna(subset=["temp", "cloud", "gti"])
+
+        def get_oldest_date(weather_df):
+            if not weather_df.empty:
+                return weather_df["date"].min()
+            return None
+
+        def get_latest_date(weather_df):
+            if not weather_df.empty:
+                return weather_df["date"].max()
+            return None
+
         with self.engine.begin() as conn:
             for _, row in weather_df.iterrows():
                 conn.execute(
@@ -238,7 +249,7 @@ class DBManager:
                     row.to_dict(),
                 )
         self.logger.info(
-            f"Wstawiono lub zaktualizowano {len(weather_df)} rekordów do tabeli weather."
+            f"Wstawiono lub zaktualizowano {len(weather_df)} typu {type_value} rekordów do tabeli weather.\nOd {get_oldest_date(weather_df)} do {get_latest_date(weather_df)}."
         )
 
     def get_pv_production_prediction_data(self):
@@ -379,7 +390,7 @@ class DBManager:
             ["date", "hour", "type", "object_id"],
         )
         self.logger.info(
-            f"Wstawiono puste rekordy typu 'predicted' do pv_production i sold_energy dla {len(df)} dat/godzin."
+            f"Wstawiono puste rekordy typu 'predicted' do pv_production i sold_energy dla {len(df)} dat/godzin. Od {df['date'].min()} do {df['date'].max()}."
         )
 
     def get_sold_energy_prediction_data(self):
