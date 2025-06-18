@@ -14,7 +14,7 @@ class ForecastWeatherDataReceiver:
     def __init__(self, latitude, longitude, output_file, past_days=1, forecast_days=1):
         self.latitude = latitude
         self.longitude = longitude
-        self.timezone = "Europe/Berlin"
+        self.timezone = "Europe/Warsaw"  # Możesz zmienić na inny strefę czasową
         self.output_file = output_file
         self.past_days = past_days
         self.forecast_days = forecast_days
@@ -64,6 +64,8 @@ class ForecastWeatherDataReceiver:
         df = pd.DataFrame(data=hourly_data)
         if pd.api.types.is_datetime64_any_dtype(df["date"]):
             df["date"] = df["date"].dt.tz_localize(None)
+
+        df = self.shift_hour_dst_only(df)
         return df
 
     def filter_complete_days(self, df):
@@ -87,6 +89,25 @@ class ForecastWeatherDataReceiver:
     def display(self, df, n=5):
         print(df.head(n))
 
+    def shift_hour_dst_only(self, df, date_col="date"):
+        """
+        Dodaje 1 godzinę do daty tylko w okresie czasu letniego (DST) w Polsce.
+        """
+        dt = pd.to_datetime(df[date_col])
+        # Lokalizacja lub konwersja do strefy Europe/Berlin
+        if getattr(dt.dt, "tz", None) is None:
+            dt_local = dt.dt.tz_localize(
+                "Europe/Berlin", ambiguous="NaT", nonexistent="shift_forward"
+            )
+        else:
+            dt_local = dt.dt.tz_convert("Europe/Berlin")
+        # Sprawdzenie DST dla każdej daty
+        is_dst = dt_local.map(lambda x: x.dst() != pd.Timedelta(0))
+        # Dodanie godziny tylko tam, gdzie DST
+        df.loc[is_dst, date_col] = dt[is_dst] + pd.Timedelta(hours=1)
+        df.loc[~is_dst, date_col] = dt[~is_dst]
+        return df
+
     def run(self):
         df = self.fetch_forecast_data()
         self.save_to_excel(df, self.output_file)
@@ -97,7 +118,7 @@ if __name__ == "__main__":
         latitude=49.6887,
         longitude=21.7706,
         output_file="data/weather/forecast_weather.xlsx",  # Możesz pominąć eksport do pliku, to tylko placeholder
-        past_days=1,
+        past_days=0,
         forecast_days=4,
     )
     receiver.run()
