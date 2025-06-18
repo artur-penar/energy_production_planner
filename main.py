@@ -42,19 +42,28 @@ def save_weather(receiver, fetch_method, db, data_type):
         logging.error(f"Error saving {data_type} weather data: {e}")
 
 
+def get_last_weather_date(db, data_type):
+    """Funkcja pomocnicza do pobierania ostatniej daty z bazy danych."""
+    last_date = db.get_latest_weather_date(data_type)
+    if last_date is None:
+        last_date = "2025-03-01"  # Domyślna data, jeśli brak danych
+    return last_date
+
+
 if __name__ == "__main__":
     db = DBManager(DB_URL)
     excel_path = r"C:\Users\Użytkownik1\Desktop\python_scripts\energy_production_planner\data\input\production_to_predict.xlsx"
     db.import_data_from_excel(excel_path, object_id=1, type_value="real")
 
-    last_date = db.get_latest_weather_date("real")
+    last_real_weather_date = get_last_weather_date(db, "real")
     today = pd.Timestamp.now(tz="UTC").normalize().strftime("%Y-%m-%d")
+    logging.info("Last real date in database: %s", last_real_weather_date)
 
     historical_receiver = HistoricalWeatherDataReceiver(
         latitude=LATITUDE,
         longitude=LONGITUDE,
         output_file=HISTORICAL_FILE,
-        start_date=last_date,
+        start_date=last_real_weather_date,
         end_date=today,
     )
 
@@ -109,3 +118,5 @@ if __name__ == "__main__":
         db.get_sold_energy_prediction_data,
         db.update_predicted_sold_energy,
     )
+
+    # Załóżmy, że df to Twój DataFrame z danymi pogodowymi
