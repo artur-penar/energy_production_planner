@@ -9,11 +9,26 @@ class HistoricalWeatherDataReceiver:
         self.latitude = latitude
         self.longitude = longitude
         self.start_date = start_date
+        self.timezone = "Europe/Warsaw"
         self.end_date = end_date
         self.output_file = output_file
         self.cache_session = requests_cache.CachedSession(".cache", expire_after=-1)
         self.retry_session = retry(self.cache_session, retries=5, backoff_factor=0.2)
         self.openmeteo = openmeteo_requests.Client(session=self.retry_session)
+
+    def shift_hour_dst_only(self, df, date_col='date'):
+        dt = pd.to_datetime(df[date_col])
+        # Lokalizacja lub konwersja do strefy Europe/Berlin
+        if dt.dt.tz is None:
+            dt_local = dt.dt.tz_localize('Europe/Berlin', ambiguous='NaT', nonexistent='shift_forward')
+        else:
+            dt_local = dt.dt.tz_convert('Europe/Berlin')
+        # Sprawdzenie DST dla każdej daty
+        is_dst = dt_local.map(lambda x: x.dst() != pd.Timedelta(0))
+        # Dodanie godziny tylko tam, gdzie DST
+        df.loc[is_dst, date_col] = dt[is_dst] + pd.Timedelta(hours=1)
+        df.loc[~is_dst, date_col] = dt[~is_dst]
+        return df
 
     def print_api_metadata(self, response):
         print(f"Coordinates {response.Latitude()}°N {response.Longitude()}°E")
@@ -28,6 +43,7 @@ class HistoricalWeatherDataReceiver:
             "longitude": self.longitude,
             "start_date": self.start_date,
             "end_date": self.end_date,
+            "timezone": self.timezone,
             "hourly": [
                 "temperature_2m",
                 "cloud_cover",
@@ -54,6 +70,8 @@ class HistoricalWeatherDataReceiver:
             "global_tilted_irradiance": hourly_global_tilted_irradiance,  # Ujednolicona nazwa
         }
         df = pd.DataFrame(data=hourly_data)
+        print(df.columns)
+        df = self.shift_hour_dst_only(df)
         if pd.api.types.is_datetime64_any_dtype(df["date"]):
             df["date"] = df["date"].dt.tz_localize(None)
         return df
@@ -89,8 +107,8 @@ if __name__ == "__main__":
     receiver = HistoricalWeatherDataReceiver(
         latitude=49.6887,
         longitude=21.7706,
-        start_date="2025-06-08",
-        end_date="2025-06-11",
+        start_date="2025-06-11",
+        end_date="2025-06-18",
         output_file="data/weather/historical_weather.xlsx",
     )
     receiver.run()
