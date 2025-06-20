@@ -90,13 +90,13 @@ if __name__ == "__main__":
     energy_predictor = EnergyProductionPredictor(
         input_path="data/input/production_to_predict.xlsx",
         output_pred_path="data/input/pv_predicted.xlsx",
-        output_pivot_path="data/output/pv_pivot.xlsx",
+        output_pivot_path="data/output/pv_pivot_db.xlsx",
     )
 
     sold_energy_predictor = SoldEnergyPredictor(
         input_path="data/input/pv_predicted.xlsx",
         output_pred_path="data/output/sold_predicted.xlsx",
-        output_pivot_path="data/output/sold_pivot.xlsx",
+        output_pivot_path="data/output/sold_pivot_db.xlsx",
     )
 
     energy_production_training_data = db.get_pv_production_training_data()
