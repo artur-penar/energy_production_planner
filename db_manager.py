@@ -6,6 +6,11 @@ from sqlalchemy import Table, MetaData
 from sqlalchemy import create_engine, text
 from sqlalchemy.dialects.postgresql import insert
 
+GET_LATEST_PV_PRODUCTION_DATE = """
+SELECT MAX(date) AS last_real_date
+FROM pv_production
+WHERE type = :type_value"""
+
 
 class DBManager:
     def __init__(self, db_url):
@@ -13,16 +18,9 @@ class DBManager:
         self.logger = logging.getLogger(__name__)
 
     def get_latest_pv_production_date(self, type_value="real"):
-        """
-        Zwraca ostatnią datę z tabeli pv_production, gdzie type='real'.
-        """
-        query = text(
-            """
-            SELECT MAX(date) AS last_real_date
-            FROM pv_production
-            WHERE type = :type_value 
-        """
-        )
+        """Zwraca ostatnią datę z tabeli pv_production, gdzie type='real'."""
+
+        query = text(GET_LATEST_PV_PRODUCTION_DATE)
         with self.engine.connect() as conn:
             result = conn.execute(query, {"type_value": type_value}).fetchone()
         return result[0] if result else None
@@ -174,7 +172,7 @@ class DBManager:
                 s.sold_energy
             FROM sold_energy s
             JOIN pv_production p
-              ON s.date = p.date AND s.hour = p.hour AND p.type = 'real'
+              ON s.date = p.date AND s.hour = p.hour AND p.type = 'real' and s.type = 'real'
             WHERE s.sold_energy IS NOT NULL
         """
         )
