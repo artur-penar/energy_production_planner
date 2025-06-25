@@ -62,8 +62,9 @@ class EnergyProductionPredictor:
         produced_pivot.index = produced_pivot.index + 1  # godziny od 1 do 24
         produced_pivot.index.name = "hour"
         produced_pivot = produced_pivot.astype(float).fillna(0)
+        produced_pivot = produced_pivot / 1000 # przeliczenie na MWh
         produced_pivot.loc['SUMA'] = produced_pivot.sum(numeric_only=True)
-        produced_pivot.to_excel(self.output_pivot_path, float_format="%.2f")
+        produced_pivot.to_excel(self.output_pivot_path, float_format="%.3f")
         print(f"Dane zapisane do {self.output_pivot_path}")
 
     def test_features_combinations(self):
