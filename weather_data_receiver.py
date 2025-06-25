@@ -118,7 +118,7 @@ if __name__ == "__main__":
         latitude=49.6887,
         longitude=21.7706,
         output_file="data/weather/forecast_weather.xlsx",  # Możesz pominąć eksport do pliku, to tylko placeholder
-        past_days=0,
+        past_days=1,
         forecast_days=4,
     )
     receiver.run()
