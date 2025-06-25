@@ -63,9 +63,10 @@ class SoldEnergyPredictor:
         pivot_sold.index.name = "hour"
         # Uzupełnij NaN na 0, wymuś typ float dla sumy
         pivot_sold = pivot_sold.astype(float).fillna(0)
+        pivot_sold = pivot_sold / 1000  # Przekształć na MWh
         # Dodaj wiersz z sumą na końcu
         pivot_sold.loc['SUMA'] = pivot_sold.sum(numeric_only=True)
-        pivot_sold.to_excel(self.output_pivot_path, float_format="%.2f")
+        pivot_sold.to_excel(self.output_pivot_path, float_format="%.3f")
         print(f"Dane zapisane do {self.output_pivot_path}")
 
     def test_features_combinations(self):
