@@ -71,8 +71,8 @@ if __name__ == "__main__":
         latitude=LATITUDE,
         longitude=LONGITUDE,
         output_file=FORECAST_FILE,
-        past_days=0,
-        forecast_days=4,
+        past_days=1,
+        forecast_days=5,
     )
 
     historical_weather = historical_receiver.fetch_historical_data()
