@@ -1,20 +1,17 @@
 import tkinter as tk
-from tkinter import messagebox, filedialog
+from tkinter import ttk, messagebox, filedialog
 from tkintertable import TableCanvas, TableModel
 from datetime import date
 import pandas as pd
 from tkcalendar import DateEntry
 
 
-class TableWithDate(tk.Tk):
-    def __init__(self):
-        super().__init__()
-        self.title("Tabela godzinowa (tkintertable)")
-        self.geometry("400x600")
-        self.resizable(False, False)
-
-        # Data na górze okna - interaktywny wybór daty
+class TableTab(tk.Frame):
+    def __init__(self, parent):
+        super().__init__(parent)
         self.date_var = tk.StringVar(value=date.today().strftime("%Y-%m-%d"))
+
+        # Date selection
         date_frame = tk.Frame(self)
         date_frame.pack(pady=10)
         tk.Label(date_frame, text="Data:").pack(side=tk.LEFT)
@@ -27,15 +24,14 @@ class TableWithDate(tk.Tk):
         )
         self.date_entry.pack(side=tk.LEFT)
 
-        # Przygotowanie danych do tabeli
-        data = {}
-        for hour in range(24):
-            data[hour] = {"Wartość": ""}
+        # Prepare table data for 24 hours
+        data = {hour: {"Wartość": ""} for hour in range(24)}
 
         self.model = TableModel()
         self.model.importDict(data)
+        self.model.columnalign = {"Wartość": "center"}
 
-        # Tabela
+        # Table frame
         table_frame = tk.Frame(self)
         table_frame.pack(pady=10, fill="both", expand=True)
         self.table = TableCanvas(
@@ -50,28 +46,25 @@ class TableWithDate(tk.Tk):
         )
         self.table.show()
 
-        # Przyciski pod tabelą
+        # Buttons
         button_frame = tk.Frame(self)
         button_frame.pack(pady=10)
-
         clear_btn = tk.Button(button_frame, text="Clear Data", command=self.clear_data)
         clear_btn.pack(side=tk.LEFT, padx=10)
-
         copy_btn = tk.Button(
             button_frame, text="Copy to Clipboard", command=self.copy_to_clipboard
         )
         copy_btn.pack(side=tk.LEFT, padx=10)
 
-        self.bind_all("<Control-v>", self.paste_from_clipboard)
-        self.bind_all("<Control-V>", self.paste_from_clipboard)
-        print(self.model.columnNames)
+        # Clipboard paste bindings
+        self.table.bind("<Control-v>", self.paste_from_clipboard)
+        self.table.bind("<Control-V>", self.paste_from_clipboard)
 
     def paste_from_clipboard(self, event=None):
         try:
             clipboard = self.clipboard_get()
             lines = clipboard.strip().split("\n")
             row_keys = list(self.model.data.keys())
-            print("Row keys:", row_keys)
             for i, line in enumerate(lines):
                 if i >= len(row_keys):
                     break
@@ -85,7 +78,6 @@ class TableWithDate(tk.Tk):
             self.table.redraw()
         except Exception as e:
             messagebox.showerror("Błąd", f"Nie udało się wkleić danych: {e}")
-            print(f"Error pasting data: {e}")
 
     def clear_data(self):
         for row_key in self.model.data.keys():
@@ -96,7 +88,7 @@ class TableWithDate(tk.Tk):
         try:
             values = []
             for row_key in self.model.data.keys():
-                val = self.model.getValueAt(row_key, 0)
+                val = self.model.getValueAt(row_key, "Wartość")
                 if val is None:
                     val = ""
                 values.append(str(val))
@@ -108,6 +100,23 @@ class TableWithDate(tk.Tk):
             messagebox.showerror("Błąd", f"Nie udało się skopiować danych: {e}")
 
 
+class TableWithTabs(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Tabela godzinowa z zakładkami")
+        self.geometry("420x700")
+        self.resizable(False, False)
+
+        notebook = ttk.Notebook(self)
+        notebook.pack(fill="both", expand=True)
+
+        # Dodaj dwie zakładki (możesz dodać więcej)
+        tab1 = TableTab(notebook)
+        tab2 = TableTab(notebook)
+        notebook.add(tab1, text="En. Wytworzona")
+        notebook.add(tab2, text="En. Wprowadzona")
+
+
 if __name__ == "__main__":
-    app = TableWithDate()
+    app = TableWithTabs()
     app.mainloop()
