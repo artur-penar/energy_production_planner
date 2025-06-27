@@ -3,6 +3,7 @@ from tkinter import messagebox, filedialog
 from tkintertable import TableCanvas, TableModel
 from datetime import date
 import pandas as pd
+from tkcalendar import DateEntry
 
 
 class TableWithDate(tk.Tk):
@@ -12,13 +13,17 @@ class TableWithDate(tk.Tk):
         self.geometry("400x600")
         self.resizable(False, False)
 
-        # Data na górze okna
+        # Data na górze okna - interaktywny wybór daty
         self.date_var = tk.StringVar(value=date.today().strftime("%Y-%m-%d"))
         date_frame = tk.Frame(self)
         date_frame.pack(pady=10)
         tk.Label(date_frame, text="Data:").pack(side=tk.LEFT)
-        self.date_entry = tk.Entry(
-            date_frame, textvariable=self.date_var, width=12, justify="center"
+        self.date_entry = DateEntry(
+            date_frame,
+            textvariable=self.date_var,
+            date_pattern="yyyy-mm-dd",
+            width=12,
+            justify="center",
         )
         self.date_entry.pack(side=tk.LEFT)
 
