@@ -337,7 +337,7 @@ class DBManager:
         """
 
         if from_date is None:
-            from_date = datetime.date.today() + datetime.timedelta(days=1)
+            from_date = datetime.date.today()
         with self.engine.begin() as conn:
             conn.execute(
                 text(
