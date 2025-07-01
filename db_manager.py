@@ -148,7 +148,7 @@ class DBManager:
                 p.produced_energy
             FROM pv_production p
             JOIN weather w
-              ON p.date = w.date AND p.hour = w.hour AND w.type = 'real'
+              ON p.date = w.date AND p.hour = w.hour AND w.type = 'real' AND p.type = 'real'
             WHERE p.produced_energy IS NOT NULL
         """
         )
