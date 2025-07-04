@@ -1,9 +1,12 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
-from tkintertable import TableCanvas, TableModel
 from datetime import date
+
 import pandas as pd
 from tkcalendar import DateEntry
+from tkintertable import TableCanvas, TableModel
+
+from db_manager import DBManager
 
 
 class TableTab(tk.Frame):
@@ -28,8 +31,12 @@ class TableTab(tk.Frame):
         )
         self.date_entry.pack(side=tk.LEFT, padx=5)
 
-        real_radio = tk.Radiobutton(date_frame, text="Rzeczywiste", variable=self.data_type, value="real")
-        pred_radio = tk.Radiobutton(date_frame, text="Prognoza", variable=self.data_type, value="predicted")
+        real_radio = tk.Radiobutton(
+            date_frame, text="Rzeczywiste", variable=self.data_type, value="real"
+        )
+        pred_radio = tk.Radiobutton(
+            date_frame, text="Prognoza", variable=self.data_type, value="predicted"
+        )
         real_radio.pack(side=tk.LEFT, padx=5)
         pred_radio.pack(side=tk.LEFT, padx=5)
 
@@ -37,8 +44,20 @@ class TableTab(tk.Frame):
         unit_frame = tk.Frame(self)
         unit_frame.pack(pady=0)
         tk.Label(unit_frame, text="Jednostka:").pack(side=tk.LEFT)
-        kwh_radio = tk.Radiobutton(unit_frame, text="kWh", variable=self.unit, value="kWh", command=self.redraw_table_with_unit)
-        mwh_radio = tk.Radiobutton(unit_frame, text="MWh", variable=self.unit, value="MWh", command=self.redraw_table_with_unit)
+        kwh_radio = tk.Radiobutton(
+            unit_frame,
+            text="kWh",
+            variable=self.unit,
+            value="kWh",
+            command=self.redraw_table_with_unit,
+        )
+        mwh_radio = tk.Radiobutton(
+            unit_frame,
+            text="MWh",
+            variable=self.unit,
+            value="MWh",
+            command=self.redraw_table_with_unit,
+        )
         kwh_radio.pack(side=tk.LEFT)
         mwh_radio.pack(side=tk.LEFT)
 
@@ -133,16 +152,18 @@ class TableTab(tk.Frame):
             return
         data_type = self.data_type.get()
         df = db.get_energy_for_date(
-            selected_date,
-            energy_type=self.energy_type,
-            data_type=data_type
+            selected_date, energy_type=self.energy_type, data_type=data_type
         )
         if df.empty:
             messagebox.showinfo("Brak danych", "Brak danych dla wybranego dnia.")
             return
         for i in range(24):
             col = "produced_energy" if self.energy_type == "produced" else "sold_energy"
-            val = df[df['hour'] == i][col] if col in df.columns else df[df['hour'] == i].iloc[:, -1]
+            val = (
+                df[df["hour"] == i][col]
+                if col in df.columns
+                else df[df["hour"] == i].iloc[:, -1]
+            )
             value = val.values[0] if not val.empty else ""
             if isinstance(value, (float, int)):
                 if self.unit.get() == "MWh":
@@ -163,7 +184,9 @@ class TableTab(tk.Frame):
                 if self.unit.get() == "MWh":
                     value_float = value_float / 1000
                 else:
-                    value_float = value_float * 1000 if float(value) < 100 else value_float
+                    value_float = (
+                        value_float * 1000 if float(value) < 100 else value_float
+                    )
                 value_str = f"{value_float:.3f}"
             else:
                 value_str = value
@@ -204,7 +227,8 @@ class TableWithTabs(tk.Tk):
 
 # --- main ---
 if __name__ == "__main__":
-    from db_manager import DBManager
-    db = DBManager()  # lub przekaz istniejący obiekt
+    DB_URL = "postgresql+psycopg2://postgres:postgres@localhost:5432/energy_prediction"
+
+    db = DBManager(DB_URL)  # lub przekaz istniejący obiekt
     app = TableWithTabs(db_manager=db)
     app.mainloop()
