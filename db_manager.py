@@ -1,16 +1,11 @@
 import logging
 import datetime
 import holidays
+import sql_queries
 import pandas as pd
 from sqlalchemy import Table, MetaData
 from sqlalchemy import create_engine, text
 from sqlalchemy.dialects.postgresql import insert
-
-GET_LATEST_PV_PRODUCTION_DATE = """
-SELECT MAX(date) AS last_real_date
-FROM pv_production
-WHERE type = :type_value"""
-
 
 class DBManager:
     def __init__(self, db_url):
@@ -18,48 +13,25 @@ class DBManager:
         self.logger = logging.getLogger(__name__)
 
     def get_latest_pv_production_date(self, type_value="real"):
-        """Zwraca ostatnią datę z tabeli pv_production, gdzie type='real'."""
-
-        query = text(GET_LATEST_PV_PRODUCTION_DATE)
+        query = text(sql_queries.GET_LATEST_PV_PRODUCTION_DATE)
         with self.engine.connect() as conn:
             result = conn.execute(query, {"type_value": type_value}).fetchone()
         return result[0] if result else None
 
     def get_latest_weather_date(self, type_value="real"):
-        """
-        Zwraca ostatnią datę z tabeli weather, gdzie type='real'.
-        """
-        query = text(
-            """
-            SELECT MAX(date) AS last_real_date
-            FROM weather
-            WHERE type = :type_value 
-        """
-        )
+        query = text(sql_queries.GET_LATEST_WEATHER_DATE)
         with self.engine.connect() as conn:
             result = conn.execute(query, {"type_value": type_value}).fetchone()
         return result[0] if result else None
 
     def is_weather_day_complete(self, last_date=None, type_value="real"):
-        """
-        Sprawdza, czy ostatni dzień z tabeli weather (type='real') ma pełne dane dla każdej godziny.
-        Zwraca True, jeśli wszystkie godziny są obecne, w przeciwnym razie False.
-        """
         if not last_date:
             return False
-
-        query = text(
-            """
-            SELECT COUNT(*) AS hour_count
-            FROM weather
-            WHERE date = :date AND type = :type_value
-        """
-        )
+        query = text(sql_queries.IS_WEATHER_DAY_COMPLETE)
         with self.engine.connect() as conn:
             result = conn.execute(
                 query, {"date": last_date, "type_value": type_value}
             ).fetchone()
-
         return result[0] == 24
 
     def clear_and_reset_tables(self):
@@ -137,21 +109,7 @@ class DBManager:
         """
         Zwraca DataFrame z danymi do nauki modelu (łącząc dane pogodowe i produkcję).
         """
-        query = text(
-            """
-            SELECT
-                p.date,
-                p.hour,
-                w.temp,
-                w.cloud,
-                w.gti,
-                p.produced_energy
-            FROM pv_production p
-            JOIN weather w
-              ON p.date = w.date AND p.hour = w.hour AND w.type = 'real' AND p.type = 'real'
-            WHERE p.produced_energy IS NOT NULL
-        """
-        )
+        query = text(sql_queries.GET_PV_PRODUCTION_TRAINING_DATA)
         df = pd.read_sql(query, self.engine)
         df["date"] = pd.to_datetime(df["date"])
         df["month"] = df["date"].dt.month
@@ -163,19 +121,7 @@ class DBManager:
         Zwraca DataFrame z danymi do nauki modelu dla energii oddanej (sold_energy),
         wyliczając cechy month, day_of_week, is_holiday.
         """
-        query = text(
-            """
-            SELECT
-                s.date,
-                s.hour,
-                p.produced_energy,
-                s.sold_energy
-            FROM sold_energy s
-            JOIN pv_production p
-              ON s.date = p.date AND s.hour = p.hour AND p.type = 'real' and s.type = 'real'
-            WHERE s.sold_energy IS NOT NULL
-        """
-        )
+        query = text(sql_queries.GET_SOLD_ENERGY_TRAINING_DATA)
         df = pd.read_sql(query, self.engine)
         df["date"] = pd.to_datetime(df["date"])
         df["month"] = df["date"].dt.month
@@ -233,17 +179,7 @@ class DBManager:
         with self.engine.begin() as conn:
             for _, row in weather_df.iterrows():
                 conn.execute(
-                    text(
-                        """
-                        INSERT INTO weather (date, hour, temp, cloud, gti, type)
-                        VALUES (:date, :hour, :temp, :cloud, :gti, :type)
-                        ON CONFLICT (date, hour, type)
-                        DO UPDATE SET
-                            temp = EXCLUDED.temp,
-                            cloud = EXCLUDED.cloud,
-                            gti = EXCLUDED.gti
-                        """
-                    ),
+                    text(sql_queries.INSERT_OR_UPDATE_WEATHER),
                     row.to_dict(),
                 )
         self.logger.info(
@@ -255,23 +191,7 @@ class DBManager:
         Pobiera dane z bazy do predykcji (rekordy z pv_production, gdzie produced_energy jest NULL),
         łącząc z danymi pogodowymi.
         """
-        query = text(
-            """
-            SELECT
-                p.date,
-                p.hour,
-                w.temp,
-                w.cloud,
-                w.gti,
-                p.produced_energy,
-                p.type,
-                p.object_id
-            FROM pv_production p
-            JOIN weather w
-              ON p.date = w.date AND p.hour = w.hour AND w.type = 'predicted'
-            WHERE p.produced_energy IS NULL
-            """
-        )
+        query = text(sql_queries.GET_PV_PRODUCTION_PREDICTION_DATA)
         df = pd.read_sql(query, self.engine)
         df["date"] = pd.to_datetime(df["date"])
         df["month"] = df["date"].dt.month
@@ -286,13 +206,7 @@ class DBManager:
             for _, row in df.iterrows():
                 if pd.notna(row["produced_energy"]):
                     conn.execute(
-                        text(
-                            """
-                            UPDATE pv_production
-                            SET produced_energy = :produced_energy
-                            WHERE date = :date AND hour = :hour AND type = :type AND object_id = :object_id
-                            """
-                        ),
+                        text(sql_queries.UPDATE_PRODUCED_ENERGY),
                         {
                             "produced_energy": row["produced_energy"],
                             "date": row["date"],
@@ -313,13 +227,7 @@ class DBManager:
             for _, row in df.iterrows():
                 if pd.notna(row["sold_energy"]):
                     conn.execute(
-                        text(
-                            """
-                            UPDATE sold_energy
-                            SET sold_energy = :sold_energy
-                            WHERE date = :date AND hour = :hour AND type = :type AND object_id = :object_id
-                            """
-                        ),
+                        text(sql_queries.UPDATE_SOLD_ENERGY),
                         {
                             "sold_energy": row["sold_energy"],
                             "date": row["date"],
@@ -340,15 +248,11 @@ class DBManager:
             from_date = datetime.date.today()
         with self.engine.begin() as conn:
             conn.execute(
-                text(
-                    "DELETE FROM pv_production WHERE type = 'predicted' AND date >= :from_date"
-                ),
+                text(sql_queries.DELETE_PV_PRODUCTION_PREDICTED),
                 {"from_date": from_date},
             )
             conn.execute(
-                text(
-                    "DELETE FROM sold_energy WHERE type = 'predicted' AND date >= :from_date"
-                ),
+                text(sql_queries.DELETE_SOLD_ENERGY_PREDICTED),
                 {"from_date": from_date},
             )
 
@@ -361,13 +265,7 @@ class DBManager:
         Wstawia puste rekordy (NULL) typu 'predicted' do obu tabel: pv_production i sold_energy
         dla wszystkich dat/godzin z weather typu 'predicted'.
         """
-        query = text(
-            """
-            SELECT DISTINCT date, hour
-            FROM weather
-            WHERE type = 'predicted'
-            """
-        )
+        query = text(sql_queries.SELECT_DISTINCT_PREDICTED_WEATHER)
         df = pd.read_sql(query, self.engine)
         df["type"] = "predicted"
         df["object_id"] = object_id
@@ -396,21 +294,7 @@ class DBManager:
         Pobiera dane z bazy do predykcji (rekordy z sold_energy, gdzie sold_energy jest NULL),
         łącząc z danymi produkcji PV oraz wylicza cechy wymagane do predykcji.
         """
-        query = text(
-            """
-            SELECT
-                s.date,
-                s.hour,
-                p.produced_energy,
-                s.sold_energy,
-                s.type,
-                s.object_id
-            FROM sold_energy s
-            JOIN pv_production p
-              ON s.date = p.date AND s.hour = p.hour AND s.type = 'predicted' AND p.type = 'predicted'
-            WHERE s.sold_energy IS NULL
-            """
-        )
+        query = text(sql_queries.GET_SOLD_ENERGY_PREDICTION_DATA)
         df = pd.read_sql(query, self.engine)
         if not df.empty:
             df["date"] = pd.to_datetime(df["date"])
@@ -431,47 +315,11 @@ class DBManager:
         data_type: "real" (historyczne) lub "predicted" (prognozy)
         """
         if energy_type == "produced":
-            table = "pv_production"
-            value_col = "produced_energy"
-            weather_join = True
+            query = text(sql_queries.GET_ENERGY_FOR_DATE_PRODUCED)
         elif energy_type == "sold":
-            table = "sold_energy"
-            value_col = "sold_energy"
-            weather_join = False  # zakładamy, że nie łączysz z weather dla sold_energy
+            query = text(sql_queries.GET_ENERGY_FOR_DATE_SOLD)
         else:
             raise ValueError("energy_type must be 'produced' or 'sold'")
-
-        if weather_join:
-            query = text(f"""
-                SELECT
-                    p.date,
-                    p.hour,
-                    w.temp,
-                    w.cloud,
-                    w.gti,
-                    p.{value_col}
-                FROM {table} p
-                JOIN weather w
-                  ON p.date = w.date AND p.hour = w.hour AND w.type = :data_type AND p.type = :data_type
-                WHERE p.{value_col} IS NOT NULL
-                  AND p.date = :date
-                  AND p.object_id = :object_id
-                ORDER BY p.hour
-            """)
-        else:
-            query = text(f"""
-                SELECT
-                    s.date,
-                    s.hour,
-                    s.{value_col}
-                FROM {table} s
-                WHERE s.{value_col} IS NOT NULL
-                  AND s.date = :date
-                  AND s.type = :data_type
-                  AND s.object_id = :object_id
-                ORDER BY s.hour
-            """)
-
         df = pd.read_sql(query, self.engine, params={"date": date, "data_type": data_type, "object_id": object_id})
         if not df.empty:
             df["date"] = pd.to_datetime(df["date"])
