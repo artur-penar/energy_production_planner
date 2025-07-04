@@ -18,7 +18,7 @@ class TableTab(tk.Frame):
         self.unit = tk.StringVar(value="kWh")
 
         self.date_var = tk.StringVar(value=date.today().strftime("%Y-%m-%d"))
-        # Wiersz 1: Data + typ danych (real/predicted)
+        # Wiersz 1: Data
         date_frame = tk.Frame(self)
         date_frame.pack(pady=10)
         tk.Label(date_frame, text="Data:").pack(side=tk.LEFT)
@@ -31,16 +31,26 @@ class TableTab(tk.Frame):
         )
         self.date_entry.pack(side=tk.LEFT, padx=5)
 
+        # Wiersz 2: Typ danych (real/predicted)
+        data_type_frame = tk.Frame(self)
+        data_type_frame.pack(pady=0)
+        tk.Label(data_type_frame, text="Typ danych:").pack(side=tk.LEFT)
         real_radio = tk.Radiobutton(
-            date_frame, text="Rzeczywiste", variable=self.data_type, value="real"
+            data_type_frame,
+            text="Rzeczywiste",
+            variable=self.data_type,
+            value="real"
         )
         pred_radio = tk.Radiobutton(
-            date_frame, text="Prognoza", variable=self.data_type, value="predicted"
+            data_type_frame,
+            text="Prognoza",
+            variable=self.data_type,
+            value="predicted"
         )
         real_radio.pack(side=tk.LEFT, padx=5)
         pred_radio.pack(side=tk.LEFT, padx=5)
 
-        # Wiersz 2: Jednostka (kWh/MWh)
+        # Wiersz 3: Jednostka (kWh/MWh)
         unit_frame = tk.Frame(self)
         unit_frame.pack(pady=0)
         tk.Label(unit_frame, text="Jednostka:").pack(side=tk.LEFT)
@@ -61,14 +71,14 @@ class TableTab(tk.Frame):
         kwh_radio.pack(side=tk.LEFT)
         mwh_radio.pack(side=tk.LEFT)
 
-        # Prepare table data for 24 hours
+        # Przygotowanie danych do tabeli (24 godziny)
         data = {hour: {"Wartość": ""} for hour in range(24)}
 
         self.model = TableModel()
         self.model.importDict(data)
         self.model.columnalign = {"Wartość": "center"}
 
-        # Table frame
+        # Ramka z tabelą
         table_frame = tk.Frame(self)
         table_frame.pack(pady=10, fill="both", expand=True)
         self.table = TableCanvas(
@@ -87,21 +97,29 @@ class TableTab(tk.Frame):
         self.sum_label = tk.Label(self, text="Suma: 0.000 kWh")
         self.sum_label.pack(pady=(0, 10))
 
-        # Buttons
+        # Przyciski
         button_frame = tk.Frame(self)
         button_frame.pack(pady=10)
-        clear_btn = tk.Button(button_frame, text="Clear Data", command=self.clear_data)
+        clear_btn = tk.Button(
+            button_frame,
+            text="Clear Data",
+            command=self.clear_data
+        )
         clear_btn.pack(side=tk.LEFT, padx=10)
         copy_btn = tk.Button(
-            button_frame, text="Copy to Clipboard", command=self.copy_to_clipboard
+            button_frame,
+            text="Copy to Clipboard",
+            command=self.copy_to_clipboard
         )
         copy_btn.pack(side=tk.LEFT, padx=10)
         real_btn = tk.Button(
-            button_frame, text="Pobierz dane", command=self.fill_with_real_data
+            button_frame,
+            text="Pobierz dane",
+            command=self.fill_table_with_data
         )
         real_btn.pack(side=tk.LEFT, padx=10)
 
-        # Clipboard paste bindings
+        # Obsługa wklejania ze schowka
         self.table.bind("<Control-v>", self.paste_from_clipboard)
         self.table.bind("<Control-V>", self.paste_from_clipboard)
 
@@ -144,7 +162,7 @@ class TableTab(tk.Frame):
         except Exception as e:
             messagebox.showerror("Błąd", f"Nie udało się skopiować danych: {e}")
 
-    def fill_with_real_data(self):
+    def fill_table_with_data(self):
         selected_date = self.date_entry.get()
         db = self.db_manager
         if db is None:
@@ -171,7 +189,7 @@ class TableTab(tk.Frame):
                 value = f"{value:.3f}"
             self.model.setValueAt(str(value), i, 0)
         self.table.redraw()
-        self.update_sum_label()  # Dodaj to!
+        self.update_sum_label()
 
     def redraw_table_with_unit(self):
         for i in range(24):
