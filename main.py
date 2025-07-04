@@ -1,5 +1,6 @@
 import logging
 import pandas as pd
+from gui import TableWithTabs
 from db_manager import DBManager
 from historical_weather_data_receiver import HistoricalWeatherDataReceiver
 from weather_data_receiver import ForecastWeatherDataReceiver
@@ -71,7 +72,7 @@ if __name__ == "__main__":
         latitude=LATITUDE,
         longitude=LONGITUDE,
         output_file=FORECAST_FILE,
-        past_days=1,
+        past_days=0,
         forecast_days=5,
     )
 
@@ -118,5 +119,9 @@ if __name__ == "__main__":
         db.get_sold_energy_prediction_data,
         db.update_predicted_sold_energy,
     )
+
+gui = TableWithTabs(db_manager=db)
+gui.mainloop()
+
 
     # Załóżmy, że df to Twój DataFrame z danymi pogodowymi
