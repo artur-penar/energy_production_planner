@@ -55,6 +55,10 @@ class TableTab(tk.Frame):
             button_frame, text="Copy to Clipboard", command=self.copy_to_clipboard
         )
         copy_btn.pack(side=tk.LEFT, padx=10)
+        real_btn = tk.Button(
+            button_frame, text="Pobierz dane rzeczywiste", command=self.fill_with_real_data
+        )
+        real_btn.pack(side=tk.LEFT, padx=10)
 
         # Clipboard paste bindings
         self.table.bind("<Control-v>", self.paste_from_clipboard)
@@ -88,7 +92,7 @@ class TableTab(tk.Frame):
         try:
             values = []
             for row_key in self.model.data.keys():
-                val = self.model.getValueAt(row_key, "Wartość")
+                val = self.model.getValueAt(row_key, 0)
                 if val is None:
                     val = ""
                 values.append(str(val))
@@ -99,13 +103,37 @@ class TableTab(tk.Frame):
         except Exception as e:
             messagebox.showerror("Błąd", f"Nie udało się skopiować danych: {e}")
 
+    def fill_with_real_data(self):
+        # Pobierz wybraną datę
+        selected_date = self.date_entry.get()
+        # Zakładamy, że db_manager jest dostępny przez główne okno
+        db = self.master.master.db_manager if hasattr(self.master.master, 'db_manager') else None
+        if db is None:
+            messagebox.showerror("Błąd", "Brak połączenia z bazą danych.")
+            return
+        df = db.get_pv_production_for_date(selected_date)
+        if df.empty:
+            messagebox.showinfo("Brak danych", "Brak danych produkcji dla wybranego dnia.")
+            return
+        # Wypełnij tabelę wartościami produkcji według godziny
+        for i in range(24):
+            val = df[df['hour'] == i]['produced_energy']
+            value = val.values[0] if not val.empty else ""
+            # Zaokrąglanie jeśli to liczba
+            if isinstance(value, (float, int)):
+                value = f"{value:.2f}"
+            self.model.setValueAt(str(value), i, 0)
+        self.table.redraw()
+
 
 class TableWithTabs(tk.Tk):
-    def __init__(self):
+    def __init__(self, db_manager):
         super().__init__()
         self.title("Tabela godzinowa z zakładkami")
         self.geometry("420x700")
         self.resizable(False, False)
+
+        self.db_manager = db_manager
 
         notebook = ttk.Notebook(self)
         notebook.pack(fill="both", expand=True)
