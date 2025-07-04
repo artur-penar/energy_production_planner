@@ -424,13 +424,57 @@ class DBManager:
             df["date"] = df["date"].dt.date
         return df
 
+    def get_energy_for_date(self, date, energy_type="produced", data_type="real", object_id=1):
+        """
+        Zwraca DataFrame z danymi produkcji lub sprzedaży energii (historyczne lub prognozy) dla konkretnego dnia.
+        energy_type: "produced" (wyprodukowana) lub "sold" (wprowadzona/sprzedana)
+        data_type: "real" (historyczne) lub "predicted" (prognozy)
+        """
+        if energy_type == "produced":
+            table = "pv_production"
+            value_col = "produced_energy"
+            weather_join = True
+        elif energy_type == "sold":
+            table = "sold_energy"
+            value_col = "sold_energy"
+            weather_join = False  # zakładamy, że nie łączysz z weather dla sold_energy
+        else:
+            raise ValueError("energy_type must be 'produced' or 'sold'")
 
-if __name__ == "__main__":
-    db = DBManager(
-        "postgresql+psycopg2://postgres:postgres@localhost:5432/energy_prediction"
-    )
-    # db.clear_and_reset_tables()
-    # excel_path = r"C:\Users\Użytkownik1\Desktop\python_scripts\energy_production_planner\data\input\historical_data.xlsx"
-    # db.import_from_excel_to_two_tables(excel_path, object_id=1, type_value="real")
-    # print(db.get_training_data())
-    print(db.get_sold_energy_training_data())
+        if weather_join:
+            query = text(f"""
+                SELECT
+                    p.date,
+                    p.hour,
+                    w.temp,
+                    w.cloud,
+                    w.gti,
+                    p.{value_col}
+                FROM {table} p
+                JOIN weather w
+                  ON p.date = w.date AND p.hour = w.hour AND w.type = :data_type AND p.type = :data_type
+                WHERE p.{value_col} IS NOT NULL
+                  AND p.date = :date
+                  AND p.object_id = :object_id
+                ORDER BY p.hour
+            """)
+        else:
+            query = text(f"""
+                SELECT
+                    s.date,
+                    s.hour,
+                    s.{value_col}
+                FROM {table} s
+                WHERE s.{value_col} IS NOT NULL
+                  AND s.date = :date
+                  AND s.type = :data_type
+                  AND s.object_id = :object_id
+                ORDER BY s.hour
+            """)
+
+        df = pd.read_sql(query, self.engine, params={"date": date, "data_type": data_type, "object_id": object_id})
+        if not df.empty:
+            df["date"] = pd.to_datetime(df["date"])
+            df["month"] = df["date"].dt.month
+            df["date"] = df["date"].dt.date
+        return df
