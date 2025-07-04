@@ -7,11 +7,15 @@ from tkcalendar import DateEntry
 
 
 class TableTab(tk.Frame):
-    def __init__(self, parent):
+    def __init__(self, parent, db_manager, energy_type="produced", data_type="real"):
         super().__init__(parent)
-        self.date_var = tk.StringVar(value=date.today().strftime("%Y-%m-%d"))
+        self.db_manager = db_manager
+        self.energy_type = energy_type
+        self.data_type = tk.StringVar(value=data_type)
+        self.unit = tk.StringVar(value="kWh")
 
-        # Date selection
+        self.date_var = tk.StringVar(value=date.today().strftime("%Y-%m-%d"))
+        # Wiersz 1: Data + typ danych (real/predicted)
         date_frame = tk.Frame(self)
         date_frame.pack(pady=10)
         tk.Label(date_frame, text="Data:").pack(side=tk.LEFT)
@@ -22,7 +26,21 @@ class TableTab(tk.Frame):
             width=12,
             justify="center",
         )
-        self.date_entry.pack(side=tk.LEFT)
+        self.date_entry.pack(side=tk.LEFT, padx=5)
+
+        real_radio = tk.Radiobutton(date_frame, text="Rzeczywiste", variable=self.data_type, value="real")
+        pred_radio = tk.Radiobutton(date_frame, text="Prognoza", variable=self.data_type, value="predicted")
+        real_radio.pack(side=tk.LEFT, padx=5)
+        pred_radio.pack(side=tk.LEFT, padx=5)
+
+        # Wiersz 2: Jednostka (kWh/MWh)
+        unit_frame = tk.Frame(self)
+        unit_frame.pack(pady=0)
+        tk.Label(unit_frame, text="Jednostka:").pack(side=tk.LEFT)
+        kwh_radio = tk.Radiobutton(unit_frame, text="kWh", variable=self.unit, value="kWh", command=self.redraw_table_with_unit)
+        mwh_radio = tk.Radiobutton(unit_frame, text="MWh", variable=self.unit, value="MWh", command=self.redraw_table_with_unit)
+        kwh_radio.pack(side=tk.LEFT)
+        mwh_radio.pack(side=tk.LEFT)
 
         # Prepare table data for 24 hours
         data = {hour: {"Wartość": ""} for hour in range(24)}
@@ -46,6 +64,10 @@ class TableTab(tk.Frame):
         )
         self.table.show()
 
+        # Suma pod tabelą
+        self.sum_label = tk.Label(self, text="Suma: 0.000 kWh")
+        self.sum_label.pack(pady=(0, 10))
+
         # Buttons
         button_frame = tk.Frame(self)
         button_frame.pack(pady=10)
@@ -56,7 +78,7 @@ class TableTab(tk.Frame):
         )
         copy_btn.pack(side=tk.LEFT, padx=10)
         real_btn = tk.Button(
-            button_frame, text="Pobierz dane rzeczywiste", command=self.fill_with_real_data
+            button_frame, text="Pobierz dane", command=self.fill_with_real_data
         )
         real_btn.pack(side=tk.LEFT, padx=10)
 
@@ -104,26 +126,60 @@ class TableTab(tk.Frame):
             messagebox.showerror("Błąd", f"Nie udało się skopiować danych: {e}")
 
     def fill_with_real_data(self):
-        # Pobierz wybraną datę
         selected_date = self.date_entry.get()
-        # Zakładamy, że db_manager jest dostępny przez główne okno
-        db = self.master.master.db_manager if hasattr(self.master.master, 'db_manager') else None
+        db = self.db_manager
         if db is None:
             messagebox.showerror("Błąd", "Brak połączenia z bazą danych.")
             return
-        df = db.get_pv_production_for_date(selected_date)
+        data_type = self.data_type.get()
+        df = db.get_energy_for_date(
+            selected_date,
+            energy_type=self.energy_type,
+            data_type=data_type
+        )
         if df.empty:
-            messagebox.showinfo("Brak danych", "Brak danych produkcji dla wybranego dnia.")
+            messagebox.showinfo("Brak danych", "Brak danych dla wybranego dnia.")
             return
-        # Wypełnij tabelę wartościami produkcji według godziny
         for i in range(24):
-            val = df[df['hour'] == i]['produced_energy']
+            col = "produced_energy" if self.energy_type == "produced" else "sold_energy"
+            val = df[df['hour'] == i][col] if col in df.columns else df[df['hour'] == i].iloc[:, -1]
             value = val.values[0] if not val.empty else ""
-            # Zaokrąglanie jeśli to liczba
             if isinstance(value, (float, int)):
-                value = f"{value:.2f}"
+                if self.unit.get() == "MWh":
+                    value = value / 1000
+                value = f"{value:.3f}"
             self.model.setValueAt(str(value), i, 0)
         self.table.redraw()
+        self.update_sum_label()  # Dodaj to!
+
+    def redraw_table_with_unit(self):
+        for i in range(24):
+            value = self.model.getValueAt(i, 0)
+            try:
+                value_float = float(value.replace(",", "."))
+            except Exception:
+                value_float = value
+            if isinstance(value_float, (float, int)):
+                if self.unit.get() == "MWh":
+                    value_float = value_float / 1000
+                else:
+                    value_float = value_float * 1000 if float(value) < 100 else value_float
+                value_str = f"{value_float:.3f}"
+            else:
+                value_str = value
+            self.model.setValueAt(value_str, i, 0)
+        self.table.redraw()
+        self.update_sum_label()  # Dodaj to!
+
+    def update_sum_label(self):
+        total = 0.0
+        for i in range(24):
+            value = self.model.getValueAt(i, 0)
+            try:
+                total += float(value.replace(",", "."))
+            except Exception:
+                pass
+        self.sum_label.config(text=f"Suma: {total:.3f} {self.unit.get()}")
 
 
 class TableWithTabs(tk.Tk):
@@ -138,13 +194,17 @@ class TableWithTabs(tk.Tk):
         notebook = ttk.Notebook(self)
         notebook.pack(fill="both", expand=True)
 
-        # Dodaj dwie zakładki (możesz dodać więcej)
-        tab1 = TableTab(notebook)
-        tab2 = TableTab(notebook)
+        # Zakładka: En. Wytworzona (historyczne)
+        tab1 = TableTab(notebook, db_manager, energy_type="produced", data_type="real")
+        # Zakładka: En. Wprowadzona (historyczne)
+        tab2 = TableTab(notebook, db_manager, energy_type="sold", data_type="real")
         notebook.add(tab1, text="En. Wytworzona")
         notebook.add(tab2, text="En. Wprowadzona")
 
 
+# --- main ---
 if __name__ == "__main__":
-    app = TableWithTabs()
+    from db_manager import DBManager
+    db = DBManager()  # lub przekaz istniejący obiekt
+    app = TableWithTabs(db_manager=db)
     app.mainloop()
