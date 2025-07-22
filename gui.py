@@ -36,16 +36,10 @@ class TableTab(tk.Frame):
         data_type_frame.pack(pady=0)
         tk.Label(data_type_frame, text="Typ danych:").pack(side=tk.LEFT)
         real_radio = tk.Radiobutton(
-            data_type_frame,
-            text="Rzeczywiste",
-            variable=self.data_type,
-            value="real"
+            data_type_frame, text="Rzeczywiste", variable=self.data_type, value="real"
         )
         pred_radio = tk.Radiobutton(
-            data_type_frame,
-            text="Prognoza",
-            variable=self.data_type,
-            value="predicted"
+            data_type_frame, text="Prognoza", variable=self.data_type, value="predicted"
         )
         real_radio.pack(side=tk.LEFT, padx=5)
         pred_radio.pack(side=tk.LEFT, padx=5)
@@ -100,28 +94,18 @@ class TableTab(tk.Frame):
         # Przyciski
         button_frame = tk.Frame(self)
         button_frame.pack(pady=10)
-        clear_btn = tk.Button(
-            button_frame,
-            text="Clear Data",
-            command=self.clear_data
-        )
+        clear_btn = tk.Button(button_frame, text="Clear Data", command=self.clear_data)
         clear_btn.pack(side=tk.LEFT, padx=10)
         copy_btn = tk.Button(
-            button_frame,
-            text="Copy to Clipboard",
-            command=self.copy_to_clipboard
+            button_frame, text="Copy to Clipboard", command=self.copy_to_clipboard
         )
         copy_btn.pack(side=tk.LEFT, padx=10)
         real_btn = tk.Button(
-            button_frame,
-            text="Pobierz dane",
-            command=self.fill_table_with_data
+            button_frame, text="Pobierz dane", command=self.fill_table_with_data
         )
         real_btn.pack(side=tk.LEFT, padx=10)
         save_btn = tk.Button(
-            button_frame,
-            text="Zapisz do bazy",
-            command=self.save_table_to_db
+            button_frame, text="Zapisz do bazy", command=self.save_table_to_db
         )
         save_btn.pack(side=tk.LEFT, padx=10)
 
@@ -134,17 +118,22 @@ class TableTab(tk.Frame):
             clipboard = self.clipboard_get()
             lines = clipboard.strip().split("\n")
             row_keys = list(self.model.data.keys())
+
             for i, line in enumerate(lines):
                 if i >= len(row_keys):
                     break
                 value = line.split("\t")[0].replace(",", ".").strip()
+
                 if value:
                     try:
                         value_float = float(value)
                     except ValueError:
                         value_float = value
                     self.model.setValueAt(value_float, row_keys[i], 0)
+
             self.table.redraw()
+            self.update_sum_label()
+
         except Exception as e:
             messagebox.showerror("Błąd", f"Nie udało się wkleić danych: {e}")
 
@@ -223,7 +212,7 @@ class TableTab(tk.Frame):
         for i in range(24):
             value = self.model.getValueAt(i, 0)
             try:
-                total += float(value.replace(",", "."))
+                total += float(str(value).replace(",", "."))
             except Exception:
                 pass
         self.sum_label.config(text=f"Suma: {total:.3f} {self.unit.get()}")
@@ -239,15 +228,13 @@ class TableTab(tk.Frame):
                 value_float = float(str(value).replace(",", "."))
             except Exception:
                 value_float = None
-            data_list.append({
-                "date": selected_date,
-                "hour": hour,
-                col: value_float
-            })
+            data_list.append({"date": selected_date, "hour": hour, col: value_float})
         # Przekaż do db_manager
         print(data_list)
         try:
-            self.db_manager.insert_real_energy_data(data_list, energy_type=self.energy_type)
+            self.db_manager.insert_real_energy_data(
+                data_list, energy_type=self.energy_type
+            )
             messagebox.showinfo("Sukces", "Dane zostały zapisane do bazy.")
         except Exception as e:
             messagebox.showerror("Błąd", f"Nie udało się zapisać danych: {e}")
