@@ -69,9 +69,23 @@ class BasePredictor:
         produced_pivot.to_excel(self.output_pivot_path, float_format="%.3f")
         print(f"Dane zapisane do {self.output_pivot_path}")
 
+    def return_pivot(self):
+        produced_pivot = self.df.pivot_table(
+            index="hour", columns="date", values=self.pivot_value, aggfunc="sum"
+        )
+        if produced_pivot.empty or produced_pivot.shape[1] == 0:
+            return pd.DataFrame()
+        produced_pivot.index = produced_pivot.index + 1
+        produced_pivot.index.name = "hour"
+        produced_pivot = produced_pivot.astype(float).fillna(0)
+        produced_pivot = produced_pivot / 1000  # przeliczenie na MWh
+        produced_pivot.loc["SUMA"] = produced_pivot.sum(numeric_only=True)
+        return produced_pivot
+
     def run(self):
         self.load_data_from_excel()
         self.train_model()
         self.predict_missing()
         self.save_predictions()
         self.save_pivot()
+
