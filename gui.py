@@ -118,6 +118,12 @@ class TableTab(tk.Frame):
             command=self.fill_table_with_data
         )
         real_btn.pack(side=tk.LEFT, padx=10)
+        save_btn = tk.Button(
+            button_frame,
+            text="Zapisz do bazy",
+            command=self.save_table_to_db
+        )
+        save_btn.pack(side=tk.LEFT, padx=10)
 
         # Obsługa wklejania ze schowka
         self.table.bind("<Control-v>", self.paste_from_clipboard)
@@ -221,6 +227,30 @@ class TableTab(tk.Frame):
             except Exception:
                 pass
         self.sum_label.config(text=f"Suma: {total:.3f} {self.unit.get()}")
+
+    def save_table_to_db(self):
+        # Pobierz dane z tabeli
+        data_list = []
+        selected_date = self.date_entry.get()
+        col = "produced_energy" if self.energy_type == "produced" else "sold_energy"
+        for hour in range(24):
+            value = self.model.getValueAt(hour, 0)
+            try:
+                value_float = float(str(value).replace(",", "."))
+            except Exception:
+                value_float = None
+            data_list.append({
+                "date": selected_date,
+                "hour": hour,
+                col: value_float
+            })
+        # Przekaż do db_manager
+        print(data_list)
+        try:
+            self.db_manager.insert_real_energy_data(data_list, energy_type=self.energy_type)
+            messagebox.showinfo("Sukces", "Dane zostały zapisane do bazy.")
+        except Exception as e:
+            messagebox.showerror("Błąd", f"Nie udało się zapisać danych: {e}")
 
 
 class TableWithTabs(tk.Tk):
