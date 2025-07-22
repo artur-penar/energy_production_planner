@@ -326,3 +326,20 @@ class DBManager:
             df["month"] = df["date"].dt.month
             df["date"] = df["date"].dt.date
         return df
+
+    def insert_real_energy_data(self, data_list, energy_type="sold", object_id=1):
+        """
+        Wprowadza dane rzeczywiste z GUI do bazy.
+        data_list: [{"date": ..., "hour": ..., "sold_energy": ...}, ...] lub [{"date": ..., "hour": ..., "produced_energy": ...}, ...]
+        energy_type: "sold" lub "produced"
+        """
+        df = pd.DataFrame(data_list)
+        df["type"] = "real"
+        df["object_id"] = object_id
+
+        if energy_type == "sold":
+            sold_df = df[["date", "hour", "sold_energy", "type", "object_id"]].dropna(subset=["sold_energy"])
+            self._insert_ignore_duplicates("sold_energy", sold_df, ["date", "hour", "type", "object_id"])
+        elif energy_type == "produced":
+            pv_df = df[["date", "hour", "produced_energy", "type", "object_id"]].dropna(subset=["produced_energy"])
+            self._insert_ignore_duplicates("pv_production", pv_df, ["date", "hour", "type", "object_id"])
