@@ -16,9 +16,17 @@ class TableTab(tk.Frame):
         self.energy_type = energy_type
         self.data_type = tk.StringVar(value=data_type)
         self.unit = tk.StringVar(value="kWh")
-
         self.date_var = tk.StringVar(value=date.today().strftime("%Y-%m-%d"))
-        # Wiersz 1: Data
+
+        self.create_date_selector()
+        self.create_data_type_selector()
+        self.create_unit_selector()
+        self.create_table()
+        self.create_sum_label()
+        self.create_buttons()
+        self.bind_shortcuts()
+
+    def create_date_selector(self):
         date_frame = tk.Frame(self)
         date_frame.pack(pady=10)
         tk.Label(date_frame, text="Data:").pack(side=tk.LEFT)
@@ -31,7 +39,7 @@ class TableTab(tk.Frame):
         )
         self.date_entry.pack(side=tk.LEFT, padx=5)
 
-        # Wiersz 2: Typ danych (real/predicted)
+    def create_data_type_selector(self):
         data_type_frame = tk.Frame(self)
         data_type_frame.pack(pady=0)
         tk.Label(data_type_frame, text="Typ danych:").pack(side=tk.LEFT)
@@ -44,7 +52,7 @@ class TableTab(tk.Frame):
         real_radio.pack(side=tk.LEFT, padx=5)
         pred_radio.pack(side=tk.LEFT, padx=5)
 
-        # Wiersz 3: Jednostka (kWh/MWh)
+    def create_unit_selector(self):
         unit_frame = tk.Frame(self)
         unit_frame.pack(pady=0)
         tk.Label(unit_frame, text="Jednostka:").pack(side=tk.LEFT)
@@ -65,14 +73,11 @@ class TableTab(tk.Frame):
         kwh_radio.pack(side=tk.LEFT)
         mwh_radio.pack(side=tk.LEFT)
 
-        # Przygotowanie danych do tabeli (24 godziny)
+    def create_table(self):
         data = {hour: {"Wartość": ""} for hour in range(24)}
-
         self.model = TableModel()
         self.model.importDict(data)
         self.model.columnalign = {"Wartość": "center"}
-
-        # Ramka z tabelą
         table_frame = tk.Frame(self)
         table_frame.pack(pady=10, fill="both", expand=True)
         self.table = TableCanvas(
@@ -87,11 +92,11 @@ class TableTab(tk.Frame):
         )
         self.table.show()
 
-        # Suma pod tabelą
+    def create_sum_label(self):
         self.sum_label = tk.Label(self, text="Suma: 0.000 kWh")
         self.sum_label.pack(pady=(0, 10))
 
-        # Przyciski
+    def create_buttons(self):
         button_frame = tk.Frame(self)
         button_frame.pack(pady=10)
         clear_btn = tk.Button(button_frame, text="Clear Data", command=self.clear_data)
@@ -109,7 +114,7 @@ class TableTab(tk.Frame):
         )
         save_btn.pack(side=tk.LEFT, padx=10)
 
-        # Obsługa wklejania ze schowka
+    def bind_shortcuts(self):
         self.table.bind("<Control-v>", self.paste_from_clipboard)
         self.table.bind("<Control-V>", self.paste_from_clipboard)
 
@@ -275,6 +280,7 @@ class TableWithTabs(tk.Tk):
         tab2 = TableTab(notebook, db_manager, energy_type="sold", data_type="real")
         notebook.add(tab1, text="En. Wytworzona")
         notebook.add(tab2, text="En. Wprowadzona")
+
 
 
 # --- main ---
