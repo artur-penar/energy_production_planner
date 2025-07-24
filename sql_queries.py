@@ -76,15 +76,11 @@ GET_ENERGY_FOR_DATE_PRODUCED = """
 SELECT
     p.date,
     p.hour,
-    w.temp,
-    w.cloud,
-    w.gti,
     p.produced_energy
 FROM pv_production p
-JOIN weather w
-  ON p.date = w.date AND p.hour = w.hour AND w.type = :data_type AND p.type = :data_type
 WHERE p.produced_energy IS NOT NULL
   AND p.date = :date
+  AND p.type = :data_type
   AND p.object_id = :object_id
 ORDER BY p.hour
 """
