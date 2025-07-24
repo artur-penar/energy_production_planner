@@ -1,8 +1,7 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
-from datetime import date
+from tkinter import ttk, messagebox
+from datetime import date, datetime, timedelta
 
-import pandas as pd
 from tkcalendar import DateEntry
 from tkintertable import TableCanvas, TableModel
 
@@ -29,15 +28,51 @@ class TableTab(tk.Frame):
     def create_date_selector(self):
         date_frame = tk.Frame(self)
         date_frame.pack(pady=10)
-        tk.Label(date_frame, text="Data:").pack(side=tk.LEFT)
+        # Etykieta daty
+        date_label = tk.Label(
+            date_frame,
+            text="Data:",
+            font=("Arial", 13, "bold"),
+            fg="#0055aa"
+        )
+        date_label.pack(side=tk.LEFT)
+
+        # Przycisk wstecz
+        def prev_day():
+            current = datetime.strptime(self.date_var.get(), "%Y-%m-%d")
+            new_date = current - timedelta(days=1)
+            self.date_var.set(new_date.strftime("%Y-%m-%d"))
+
+        prev_btn = tk.Button(
+            date_frame, text="◀", font=("Arial", 8, "bold"), width=2, command=prev_day
+        )
+        prev_btn.pack(side=tk.LEFT, padx=(8, 2))
+
+        # Pole wyboru daty
         self.date_entry = DateEntry(
             date_frame,
             textvariable=self.date_var,
             date_pattern="yyyy-mm-dd",
-            width=12,
+            width=14,
             justify="center",
+            font=("Arial", 13, "bold"),
+            foreground="#0055aa",
+            background="#e6f2ff",
+            borderwidth=2,
+            relief="solid"
         )
-        self.date_entry.pack(side=tk.LEFT, padx=5)
+        self.date_entry.pack(side=tk.LEFT, padx=2)
+
+        # Przycisk naprzód
+        def next_day():
+            current = datetime.strptime(self.date_var.get(), "%Y-%m-%d")
+            new_date = current + timedelta(days=1)
+            self.date_var.set(new_date.strftime("%Y-%m-%d"))
+
+        next_btn = tk.Button(
+           date_frame, text="▶", font=("Arial", 8, "bold"), width=2, command=next_day
+        )
+        next_btn.pack(side=tk.LEFT, padx=(2, 8))
 
     def create_data_type_selector(self):
         data_type_frame = tk.Frame(self)
@@ -174,6 +209,11 @@ class TableTab(tk.Frame):
             selected_date, energy_type=self.energy_type, data_type=data_type
         )
         if df.empty:
+            # Wyczyść tabelę, jeśli brak danych
+            for i in range(24):
+                self.model.setValueAt("", i, 0)
+            self.table.redraw()
+            self.update_sum_label()
             messagebox.showinfo("Brak danych", "Brak danych dla wybranego dnia.")
             return
         for i in range(24):
@@ -244,7 +284,7 @@ class TableTab(tk.Frame):
             if len(small_values) >= 20:
                 if not messagebox.askyesno(
                     "Ostrzeżenie",
-                    "Większość wartości jest bardzo mała (wygląda na MWh, a nie kWh). Czy na pewno chcesz zapisać dane?"
+                    "Większość wartości jest bardzo mała (wygląda na MWh, a nie kWh). Czy na pewno chcesz zapisać dane?",
                 ):
                     return
 
@@ -266,10 +306,20 @@ class TableWithTabs(tk.Tk):
     def __init__(self, db_manager):
         super().__init__()
         self.title("Tabela godzinowa z zakładkami")
-        self.geometry("420x700")
+        self.geometry("420x740")  # <-- zwiększono wysokość z 700 na 740
         self.resizable(False, False)
 
         self.db_manager = db_manager
+
+        # --- Styl zakładek ---
+        style = ttk.Style(self)
+        style.theme_use('default')
+        style.configure('TNotebook.Tab', font=('Arial', 11))
+        style.map('TNotebook.Tab',
+                  background=[('selected', '#cce6ff')],
+                  foreground=[('selected', 'black'), ('!selected', 'gray')],
+                  font=[('selected', ('Arial', 11, 'bold')), ('!selected', ('Arial', 11, 'normal'))]
+        )
 
         notebook = ttk.Notebook(self)
         notebook.pack(fill="both", expand=True)
@@ -280,7 +330,6 @@ class TableWithTabs(tk.Tk):
         tab2 = TableTab(notebook, db_manager, energy_type="sold", data_type="real")
         notebook.add(tab1, text="En. Wytworzona")
         notebook.add(tab2, text="En. Wprowadzona")
-
 
 
 # --- main ---
