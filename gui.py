@@ -141,6 +141,7 @@ class TableTab(tk.Frame):
         for row_key in self.model.data.keys():
             self.model.setValueAt("", row_key, 0)
         self.table.redraw()
+        self.update_sum_label()
 
     def copy_to_clipboard(self):
         try:
@@ -218,19 +219,35 @@ class TableTab(tk.Frame):
         self.sum_label.config(text=f"Suma: {total:.3f} {self.unit.get()}")
 
     def save_table_to_db(self):
-        # Pobierz dane z tabeli
         data_list = []
         selected_date = self.date_entry.get()
         col = "produced_energy" if self.energy_type == "produced" else "sold_energy"
+        values = []
         for hour in range(24):
             value = self.model.getValueAt(hour, 0)
             try:
                 value_float = float(str(value).replace(",", "."))
             except Exception:
                 value_float = None
+            values.append(value_float)
             data_list.append({"date": selected_date, "hour": hour, col: value_float})
-        # Przekaż do db_manager
-        print(data_list)
+
+        # WALIDACJA: podejrzanie małe wartości w kWh
+        if self.unit.get() == "kWh":
+            # Sprawdź, czy większość wartości jest < 20 (np. 22 z 24)
+            small_values = [v for v in values if v is not None and v < 20]
+            if len(small_values) >= 20:
+                if not messagebox.askyesno(
+                    "Ostrzeżenie",
+                    "Większość wartości jest bardzo mała (wygląda na MWh, a nie kWh). Czy na pewno chcesz zapisać dane?"
+                ):
+                    return
+
+        # Przelicz na kWh jeśli trzeba
+        for row in data_list:
+            if self.unit.get() == "MWh" and row[col] is not None:
+                row[col] = row[col] * 1000
+
         try:
             self.db_manager.insert_real_energy_data(
                 data_list, energy_type=self.energy_type
