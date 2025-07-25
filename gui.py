@@ -264,6 +264,7 @@ class TableTab(tk.Frame):
         self.sum_label.config(text=f"Suma: {total:.3f} {self.unit.get()}")
 
     def save_table_to_db(self):
+
         data_list = []
         selected_date = self.date_entry.get()
         col = "produced_energy" if self.energy_type == "produced" else "sold_energy"
@@ -292,6 +293,13 @@ class TableTab(tk.Frame):
         for row in data_list:
             if self.unit.get() == "MWh" and row[col] is not None:
                 row[col] = row[col] * 1000
+
+        # Dodaj okno potwierdzenia przed zapisem do bazy z informacją o dacie
+        if not messagebox.askyesno(
+            "Potwierdzenie zapisu",
+            f"Czy na pewno chcesz zapisać wprowadzone dane do bazy dla daty: {selected_date}?"
+        ):
+            return
 
         try:
             self.db_manager.insert_real_energy_data(
