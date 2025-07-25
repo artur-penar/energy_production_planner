@@ -263,12 +263,12 @@ class TableTab(tk.Frame):
                 pass
         self.sum_label.config(text=f"Suma: {total:.3f} {self.unit.get()}")
 
-    def save_table_to_db(self):
 
-        data_list = []
+    def get_table_data(self):
         selected_date = self.date_entry.get()
         col = "produced_energy" if self.energy_type == "produced" else "sold_energy"
         values = []
+        data_list = []
         for hour in range(24):
             value = self.model.getValueAt(hour, 0)
             try:
@@ -277,30 +277,55 @@ class TableTab(tk.Frame):
                 value_float = None
             values.append(value_float)
             data_list.append({"date": selected_date, "hour": hour, col: value_float})
+        return selected_date, col, values, data_list
 
-        # WALIDACJA: podejrzanie małe wartości w kWh
-        if self.unit.get() == "kWh":
-            # Sprawdź, czy większość wartości jest < 20 (np. 22 z 24)
-            small_values = [v for v in values if v is not None and v < 20]
-            if len(small_values) >= 20:
-                if not messagebox.askyesno(
-                    "Ostrzeżenie",
-                    "Większość wartości jest bardzo mała (wygląda na MWh, a nie kWh). Czy na pewno chcesz zapisać dane?",
-                ):
-                    return
+    def validate_unit(self):
+        if self.unit.get() != "kWh":
+            messagebox.showerror(
+                "Błąd jednostki",
+                "Można zapisywać dane tylko w jednostce kWh. Proszę wybrać kWh przed zapisem do bazy."
+            )
+            return False
+        return True
 
-        # Przelicz na kWh jeśli trzeba
-        for row in data_list:
-            if self.unit.get() == "MWh" and row[col] is not None:
-                row[col] = row[col] * 1000
+    def validate_small_values(self, values):
+        small_values_20 = [v for v in values if v is not None and v < 20]
+        if len(small_values_20) >= 20:
+            if not messagebox.askyesno(
+                "Ostrzeżenie",
+                "Większość wartości jest bardzo mała (wygląda na MWh, a nie kWh). Czy na pewno chcesz zapisać dane?",
+            ):
+                return False
+        return True
 
-        # Dodaj okno potwierdzenia przed zapisem do bazy z informacją o dacie
-        if not messagebox.askyesno(
+
+    def validate_large_values(self, values):
+        large_values_1000 = [v for v in values if v is not None and v > 1000]
+        if len(large_values_1000) >= 20:
+            typ = "wyprodukowanej" if self.energy_type == "produced" else "wprowadzonej do sieci"
+            if not messagebox.askyesno(
+                "Ostrzeżenie",
+                f"Większość wartości energii {typ} jest większa niż 1000 kWh. Dane wyglądają nietypowo dla jednostki kWh. Czy na pewno chcesz zapisać dane?",
+            ):
+                return False
+        return True
+
+    def validate_table_data(self, values):
+        if not self.validate_unit():
+            return False
+        if not self.validate_small_values(values):
+            return False
+        if not self.validate_large_values(values):
+            return False
+        return True
+
+    def confirm_save_dialog(self, selected_date):
+        return messagebox.askyesno(
             "Potwierdzenie zapisu",
             f"Czy na pewno chcesz zapisać wprowadzone dane do bazy dla daty: {selected_date}?"
-        ):
-            return
+        )
 
+    def insert_data_to_db(self, data_list):
         try:
             self.db_manager.insert_real_energy_data(
                 data_list, energy_type=self.energy_type
@@ -308,6 +333,14 @@ class TableTab(tk.Frame):
             messagebox.showinfo("Sukces", "Dane zostały zapisane do bazy.")
         except Exception as e:
             messagebox.showerror("Błąd", f"Nie udało się zapisać danych: {e}")
+
+    def save_table_to_db(self):
+        selected_date, col, values, data_list = self.get_table_data()
+        if not self.validate_table_data(values):
+            return
+        if not self.confirm_save_dialog(selected_date):
+            return
+        self.insert_data_to_db(data_list)
 
 
 class TableWithTabs(tk.Tk):
