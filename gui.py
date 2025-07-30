@@ -30,10 +30,7 @@ class TableTab(tk.Frame):
         date_frame.pack(pady=10)
         # Etykieta daty
         date_label = tk.Label(
-            date_frame,
-            text="Data:",
-            font=("Arial", 13, "bold"),
-            fg="#0055aa"
+            date_frame, text="Data:", font=("Arial", 13, "bold"), fg="#0055aa"
         )
         date_label.pack(side=tk.LEFT)
 
@@ -59,7 +56,7 @@ class TableTab(tk.Frame):
             foreground="#0055aa",
             background="#e6f2ff",
             borderwidth=2,
-            relief="solid"
+            relief="solid",
         )
         self.date_entry.pack(side=tk.LEFT, padx=2)
 
@@ -70,7 +67,7 @@ class TableTab(tk.Frame):
             self.date_var.set(new_date.strftime("%Y-%m-%d"))
 
         next_btn = tk.Button(
-           date_frame, text="▶", font=("Arial", 8, "bold"), width=2, command=next_day
+            date_frame, text="▶", font=("Arial", 8, "bold"), width=2, command=next_day
         )
         next_btn.pack(side=tk.LEFT, padx=(2, 8))
 
@@ -198,24 +195,13 @@ class TableTab(tk.Frame):
         except Exception as e:
             messagebox.showerror("Błąd", f"Nie udało się skopiować danych: {e}")
 
-    def fill_table_with_data(self):
-        selected_date = self.date_entry.get()
-        db = self.db_manager
-        if db is None:
-            messagebox.showerror("Błąd", "Brak połączenia z bazą danych.")
-            return
-        data_type = self.data_type.get()
-        df = db.get_energy_for_date(
-            selected_date, energy_type=self.energy_type, data_type=data_type
-        )
-        if df.empty:
-            # Wyczyść tabelę, jeśli brak danych
-            for i in range(24):
-                self.model.setValueAt("", i, 0)
-            self.table.redraw()
-            self.update_sum_label()
-            messagebox.showinfo("Brak danych", "Brak danych dla wybranego dnia.")
-            return
+    def _clear_table_data(self):
+        for i in range(24):
+            self.model.setValueAt("", i, 0)
+        self.table.redraw()
+        self.update_sum_label()
+
+    def _insert_data_to_table(self, df):
         for i in range(24):
             col = "produced_energy" if self.energy_type == "produced" else "sold_energy"
             val = (
@@ -229,6 +215,27 @@ class TableTab(tk.Frame):
                     value = value / 1000
                 value = f"{value:.3f}"
             self.model.setValueAt(str(value), i, 0)
+
+    def _get_data_for_date(self, selected_date):
+        db = self.db_manager
+        if db is None:
+            messagebox.showerror("Błąd", "Brak połączenia z bazą danych.")
+            return None
+        data_type = self.data_type.get()
+        df = db.get_energy_for_date(
+            selected_date, energy_type=self.energy_type, data_type=data_type
+        )
+        return df
+
+    def fill_table_with_data(self):
+        df = self._get_data_for_date(self.date_entry.get())
+        if df.empty:
+            # Wyczyść tabelę, jeśli brak danych
+            self._clear_table_data()
+            messagebox.showinfo("Brak danych", "Brak danych dla wybranego dnia.")
+            return
+
+        self._insert_data_to_table(df)
         self.table.redraw()
         self.update_sum_label()
 
@@ -263,7 +270,6 @@ class TableTab(tk.Frame):
                 pass
         self.sum_label.config(text=f"Suma: {total:.3f} {self.unit.get()}")
 
-
     def get_table_data(self):
         selected_date = self.date_entry.get()
         col = "produced_energy" if self.energy_type == "produced" else "sold_energy"
@@ -283,7 +289,7 @@ class TableTab(tk.Frame):
         if self.unit.get() != "kWh":
             messagebox.showerror(
                 "Błąd jednostki",
-                "Można zapisywać dane tylko w jednostce kWh. Proszę wybrać kWh przed zapisem do bazy."
+                "Można zapisywać dane tylko w jednostce kWh. Proszę wybrać kWh przed zapisem do bazy.",
             )
             return False
         return True
@@ -298,11 +304,14 @@ class TableTab(tk.Frame):
                 return False
         return True
 
-
     def validate_large_values(self, values):
         large_values_1000 = [v for v in values if v is not None and v > 1000]
         if len(large_values_1000) >= 20:
-            typ = "wyprodukowanej" if self.energy_type == "produced" else "wprowadzonej do sieci"
+            typ = (
+                "wyprodukowanej"
+                if self.energy_type == "produced"
+                else "wprowadzonej do sieci"
+            )
             if not messagebox.askyesno(
                 "Ostrzeżenie",
                 f"Większość wartości energii {typ} jest większa niż 1000 kWh. Dane wyglądają nietypowo dla jednostki kWh. Czy na pewno chcesz zapisać dane?",
@@ -322,7 +331,7 @@ class TableTab(tk.Frame):
     def confirm_save_dialog(self, selected_date):
         return messagebox.askyesno(
             "Potwierdzenie zapisu",
-            f"Czy na pewno chcesz zapisać wprowadzone dane do bazy dla daty: {selected_date}?"
+            f"Czy na pewno chcesz zapisać wprowadzone dane do bazy dla daty: {selected_date}?",
         )
 
     def insert_data_to_db(self, data_list):
@@ -354,12 +363,16 @@ class TableWithTabs(tk.Tk):
 
         # --- Styl zakładek ---
         style = ttk.Style(self)
-        style.theme_use('default')
-        style.configure('TNotebook.Tab', font=('Arial', 11))
-        style.map('TNotebook.Tab',
-                  background=[('selected', '#cce6ff')],
-                  foreground=[('selected', 'black'), ('!selected', 'gray')],
-                  font=[('selected', ('Arial', 11, 'bold')), ('!selected', ('Arial', 11, 'normal'))]
+        style.theme_use("default")
+        style.configure("TNotebook.Tab", font=("Arial", 11))
+        style.map(
+            "TNotebook.Tab",
+            background=[("selected", "#cce6ff")],
+            foreground=[("selected", "black"), ("!selected", "gray")],
+            font=[
+                ("selected", ("Arial", 11, "bold")),
+                ("!selected", ("Arial", 11, "normal")),
+            ],
         )
 
         notebook = ttk.Notebook(self)
