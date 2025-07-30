@@ -10,7 +10,7 @@ class CompareTab(tk.Frame):
     def __init__(self, parent, db_manager, energy_type="produced", data_type="real"):
         super().__init__(parent)
         self.db_manager = db_manager
-        self.energy_type = energy_type
+        self.energy_type = tk.StringVar(value=energy_type)
         self.data_type = tk.StringVar(value=data_type)
         self.unit = tk.StringVar(value="kWh")
         self.date_var = tk.StringVar(value=date.today().strftime("%Y-%m-%d"))
@@ -75,10 +75,10 @@ class CompareTab(tk.Frame):
         data_type_frame.pack(pady=0)
         tk.Label(data_type_frame, text="Rodzaj energii:").pack(side=tk.LEFT)
         real_radio = tk.Radiobutton(
-            data_type_frame, text="Wyprodukowana", variable=self.data_type, value="produced"
+            data_type_frame, text="Wyprodukowana", variable=self.energy_type, value="produced"
         )
         pred_radio = tk.Radiobutton(
-            data_type_frame, text="Oddana", variable=self.data_type, value="sold"
+            data_type_frame, text="Oddana", variable=self.energy_type, value="sold"
         )
         real_radio.pack(side=tk.LEFT, padx=5)
         pred_radio.pack(side=tk.LEFT, padx=5)
@@ -142,8 +142,9 @@ class CompareTab(tk.Frame):
         real_btn.pack(side=tk.LEFT, padx=10)
 
     def clear_data(self):
-        for row_key in self.model.data.keys():
-            self.model.setValueAt("", row_key, 0)
+        for col in range(2):  # Zakładając, że mamy dwie kolumny: rzeczywiste i prognozowane
+            for row_key in self.model.data.keys():
+                self.model.setValueAt("", row_key, col)
         self.table.redraw()
         self.update_sum_label()
 
@@ -171,11 +172,13 @@ class CompareTab(tk.Frame):
         self.update_sum_label()
 
     def _insert_data_to_table(self, df, data_type=None):
+        energy_type = self.energy_type.get() if hasattr(self.energy_type, 'get') else self.energy_type
+        db_col = "produced_energy" if energy_type == "produced" else "sold_energy"
+        col_idx = 0 if data_type == "real" else 1
         for i in range(24):
-            col = "produced_energy" if self.energy_type == "produced" else "sold_energy"
             val = (
-                df[df["hour"] == i][col]
-                if col in df.columns
+                df[df["hour"] == i][db_col]
+                if db_col in df.columns
                 else df[df["hour"] == i].iloc[:, -1]
             )
             value = val.values[0] if not val.empty else ""
@@ -183,15 +186,16 @@ class CompareTab(tk.Frame):
                 if self.unit.get() == "MWh":
                     value = value / 1000
                 value = f"{value:.3f}"
-            self.model.setValueAt(str(value), i, 0 if data_type == "real" else 1)
+            self.model.setValueAt(str(value), i, col_idx)
 
     def _get_data_for_date(self, selected_date, data_type=None):
         db = self.db_manager
         if db is None:
             messagebox.showerror("Błąd", "Brak połączenia z bazą danych.")
             return None
+        energy_type = self.energy_type.get() if hasattr(self.energy_type, 'get') else self.energy_type
         df = db.get_energy_for_date(
-            selected_date, energy_type=self.energy_type, data_type=data_type
+            selected_date, energy_type=energy_type, data_type=data_type
         )
         return df
 
@@ -240,17 +244,3 @@ class CompareTab(tk.Frame):
                 pass
         self.sum_label.config(text=f"Suma: {total:.3f} {self.unit.get()}")
 
-    def get_table_data(self):
-        selected_date = self.date_entry.get()
-        col = "produced_energy" if self.energy_type == "produced" else "sold_energy"
-        values = []
-        data_list = []
-        for hour in range(24):
-            value = self.model.getValueAt(hour, 0)
-            try:
-                value_float = float(str(value).replace(",", "."))
-            except Exception:
-                value_float = None
-            values.append(value_float)
-            data_list.append({"date": selected_date, "hour": hour, col: value_float})
-        return selected_date, col, values, data_list
