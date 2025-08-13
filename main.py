@@ -1,6 +1,6 @@
 import logging
 import pandas as pd
-from gui import TableWithTabs
+from table_with_tabs import TableWithTabs
 from db_manager import DBManager
 from historical_weather_data_receiver import HistoricalWeatherDataReceiver
 from weather_data_receiver import ForecastWeatherDataReceiver
@@ -14,6 +14,15 @@ LATITUDE = 49.6887
 LONGITUDE = 21.7706
 HISTORICAL_FILE = "data/weather/historical_weather.xlsx"
 FORECAST_FILE = "data/weather/forecast_weather.xlsx"
+
+
+def save_pivots_to_excel(pivot_dict, output_path):
+    """Zapisuje wiele pivotów do jednego pliku Excel, każdy do osobnego arkusza."""
+    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+        for sheet_name, pivot in pivot_dict.items():
+            if not pivot.empty:
+                pivot.to_excel(writer, sheet_name=sheet_name, float_format="%.3f")
+    print(f"Pivots zapisane do {output_path} (arkusze: {', '.join(pivot_dict.keys())})")
 
 
 def train_predictor(predictor, training_data):
@@ -73,7 +82,7 @@ if __name__ == "__main__":
         longitude=LONGITUDE,
         output_file=FORECAST_FILE,
         past_days=0,
-        forecast_days=5,
+        forecast_days=9,
     )
 
     historical_weather = historical_receiver.fetch_historical_data()
@@ -120,8 +129,18 @@ if __name__ == "__main__":
         db.update_predicted_sold_energy,
     )
 
+    produced_pivot = energy_predictor.return_pivot()
+    sold_pivot = sold_energy_predictor.return_pivot()
+    save_pivots_to_excel(
+        {
+            "energia_wyprodukowana": produced_pivot,
+            "energia_oddana": sold_pivot,
+        },
+        "data/output/predictions_pivot.xlsx",
+    )
+
 gui = TableWithTabs(db_manager=db)
 gui.mainloop()
 
 
-    # Załóżmy, że df to Twój DataFrame z danymi pogodowymi
+# Załóżmy, że df to Twój DataFrame z danymi pogodowymi
