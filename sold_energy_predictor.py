@@ -18,5 +18,4 @@ if __name__ == "__main__":
         output_pivot_path="data/output/sold_pivot.xlsx",
     )
     predictor.load_data_from_excel()
-    predictor.test_features_combinations()
     predictor.run()
