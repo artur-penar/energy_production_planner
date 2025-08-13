@@ -75,7 +75,10 @@ class CompareTab(tk.Frame):
         data_type_frame.pack(pady=0)
         tk.Label(data_type_frame, text="Rodzaj energii:").pack(side=tk.LEFT)
         real_radio = tk.Radiobutton(
-            data_type_frame, text="Wyprodukowana", variable=self.energy_type, value="produced"
+            data_type_frame,
+            text="Wyprodukowana",
+            variable=self.energy_type,
+            value="produced",
         )
         pred_radio = tk.Radiobutton(
             data_type_frame, text="Oddana", variable=self.energy_type, value="sold"
@@ -124,8 +127,13 @@ class CompareTab(tk.Frame):
         self.table.show()
 
     def create_sum_label(self):
-        self.sum_label = tk.Label(self, text="Suma: 0.000 kWh")
-        self.sum_label.pack(pady=(0, 10))
+        font = ("Arial", 12, "bold")
+        self.sum_real_label = tk.Label(self, text="Suma rzeczyw.: 0.000 kWh", font=font, fg="#0055aa")
+        self.sum_real_label.pack(pady=(0, 0))
+        self.sum_pred_label = tk.Label(self, text="Suma prognozy: 0.000 kWh", font=font, fg="#007700")
+        self.sum_pred_label.pack(pady=(0, 0))
+        self.skut_label = tk.Label(self, text="Śr. skuteczność: 0.0%", font=font, fg="#aa5500")
+        self.skut_label.pack(pady=(0, 10))
 
     def create_buttons(self):
         button_frame = tk.Frame(self)
@@ -142,7 +150,9 @@ class CompareTab(tk.Frame):
         real_btn.pack(side=tk.LEFT, padx=10)
 
     def clear_data(self):
-        for col in range(2):  # Zakładając, że mamy dwie kolumny: rzeczywiste i prognozowane
+        for col in range(
+            2
+        ):  # Zakładając, że mamy dwie kolumny: rzeczywiste i prognozowane
             for row_key in self.model.data.keys():
                 self.model.setValueAt("", row_key, col)
         self.table.redraw()
@@ -164,36 +174,38 @@ class CompareTab(tk.Frame):
             messagebox.showerror("Błąd", f"Nie udało się skopiować danych: {e}")
 
     def _clear_table_data(self):
-    
-        for col in range(2):  # Zakładając, że mamy dwie kolumny: rzeczywiste i prognozowane
+        for col in range(
+            2
+        ):  # Zakładając, że mamy dwie kolumny: rzeczywiste i prognozowane
             for i in range(24):
                 self.model.setValueAt("", i, col)
         self.table.redraw()
         self.update_sum_label()
 
     def _insert_data_to_table(self, df, data_type=None):
-        energy_type = self.energy_type.get() if hasattr(self.energy_type, 'get') else self.energy_type
+        energy_type = self.energy_type.get()
         db_col = "produced_energy" if energy_type == "produced" else "sold_energy"
         col_idx = 0 if data_type == "real" else 1
-        for i in range(24):
-            val = (
-                df[df["hour"] == i][db_col]
-                if db_col in df.columns
-                else df[df["hour"] == i].iloc[:, -1]
-            )
-            value = val.values[0] if not val.empty else ""
+
+        for hour in range(24):
+            # Pobierz wartość energii dla danej godziny
+            row = df[df["hour"] == hour]
+            value = row[db_col].values[0] if not row.empty and db_col in row else ""
+
+            # Przelicz jednostki, jeśli trzeba
             if isinstance(value, (float, int)):
                 if self.unit.get() == "MWh":
-                    value = value / 1000
+                    value /= 1000
                 value = f"{value:.3f}"
-            self.model.setValueAt(str(value), i, col_idx)
+
+            self.model.setValueAt(str(value), hour, col_idx)
 
     def _get_data_for_date(self, selected_date, data_type=None):
         db = self.db_manager
         if db is None:
             messagebox.showerror("Błąd", "Brak połączenia z bazą danych.")
             return None
-        energy_type = self.energy_type.get() if hasattr(self.energy_type, 'get') else self.energy_type
+        energy_type = self.energy_type.get()
         df = db.get_energy_for_date(
             selected_date, energy_type=energy_type, data_type=data_type
         )
@@ -214,33 +226,47 @@ class CompareTab(tk.Frame):
         self.update_sum_label()
 
     def redraw_table_with_unit(self):
-        for i in range(24):
-            value = self.model.getValueAt(i, 0)
-            try:
-                value_float = float(value.replace(",", "."))
-            except Exception:
-                value_float = value
-            if isinstance(value_float, (float, int)):
-                if self.unit.get() == "MWh":
-                    value_float = value_float / 1000
+        for col in range(2):
+            for i in range(24):
+                value = self.model.getValueAt(i, col)
+                try:
+                    value_float = float(value.replace(",", "."))
+                except Exception:
+                    value_float = value
+                if isinstance(value_float, (float, int)):
+                    if self.unit.get() == "MWh":
+                        value_float = value_float / 1000
+                    else:
+                        value_float = (
+                            value_float * 1000 if float(value) < 100 else value_float
+                        )
+                    value_str = f"{value_float:.3f}"
                 else:
-                    value_float = (
-                        value_float * 1000 if float(value) < 100 else value_float
-                    )
-                value_str = f"{value_float:.3f}"
-            else:
-                value_str = value
-            self.model.setValueAt(value_str, i, 0)
+                    value_str = value
+                self.model.setValueAt(value_str, i, col)
         self.table.redraw()
         self.update_sum_label()  # Dodaj to!
 
     def update_sum_label(self):
-        total = 0.0
-        for i in range(24):
-            value = self.model.getValueAt(i, 0)
-            try:
-                total += float(str(value).replace(",", "."))
-            except Exception:
-                pass
-        self.sum_label.config(text=f"Suma: {total:.3f} {self.unit.get()}")
+        real_values = [
+            float(str(self.model.getValueAt(i, 0)).replace(",", "."))
+            for i in range(24)
+            if self.model.getValueAt(i, 0) not in (None, "")
+        ]
+        pred_values = [
+            float(str(self.model.getValueAt(i, 1)).replace(",", "."))
+            for i in range(24)
+            if self.model.getValueAt(i, 1) not in (None, "")
+        ]
 
+        total_real = sum(real_values)
+        total_pred = sum(pred_values)
+
+        if total_real == 0:
+            skut_sum = 100.0 if total_pred == 0 else 0.0
+        else:
+            skut_sum = (1 - abs(total_real - total_pred) / abs(total_real)) * 100
+
+        self.sum_real_label.config(text=f"Suma rzeczyw.: {total_real:.3f} {self.unit.get()}")
+        self.sum_pred_label.config(text=f"Suma prognozy: {total_pred:.3f} {self.unit.get()}")
+        self.skut_label.config(text=f"Skuteczność sum: {skut_sum:.1f}%")
