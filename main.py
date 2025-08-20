@@ -1,7 +1,7 @@
 import logging
 import pandas as pd
-from table_with_tabs import TableWithTabs
 from db_manager import DBManager
+from table_with_tabs import TableWithTabs
 from historical_weather_data_receiver import HistoricalWeatherDataReceiver
 from weather_data_receiver import ForecastWeatherDataReceiver
 from energy_production_predictor import EnergyProductionPredictor
@@ -109,7 +109,7 @@ if __name__ == "__main__":
         output_pivot_path="data/output/sold_pivot_db.xlsx",
     )
 
-    energy_production_training_data = db.get_pv_production_training_data()
+    energy_production_training_data = db.get_produced_energy_training_data()
     train_predictor(energy_predictor, energy_production_training_data)
 
     sold_energy_training_data = db.get_sold_energy_training_data()
@@ -120,7 +120,7 @@ if __name__ == "__main__":
 
     predict_and_save_data(
         energy_predictor,
-        db.get_pv_production_prediction_data,
+        db.get_produced_energy_prediction_data,
         db.update_predicted_produced_energy,
     )
     predict_and_save_data(
