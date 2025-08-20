@@ -1,6 +1,6 @@
-GET_LATEST_PV_PRODUCTION_DATE = """
+GET_LATEST_ENERGY_PRODUCTION_DATE = """ 
 SELECT MAX(date) AS last_real_date
-FROM pv_production
+FROM produced_energy 
 WHERE type = :type_value
 """
 
@@ -16,7 +16,7 @@ FROM weather
 WHERE date = :date AND type = :type_value
 """
 
-GET_PV_PRODUCTION_TRAINING_DATA = """
+GET_PRODUCED_ENERGY_TRAINING_DATA = """
 SELECT
     p.date,
     p.hour,
@@ -24,12 +24,12 @@ SELECT
     w.cloud,
     w.gti,
     p.produced_energy
-FROM pv_production p
+FROM produced_energy p
 JOIN weather w
   ON p.date = w.date AND p.hour = w.hour AND w.type = 'real' AND p.type = 'real'
 WHERE p.produced_energy IS NOT NULL
+AND p.object_id = 1 
 """
-
 GET_SOLD_ENERGY_TRAINING_DATA = """
 SELECT
     s.date,
@@ -37,12 +37,13 @@ SELECT
     p.produced_energy,
     s.sold_energy
 FROM sold_energy s
-JOIN pv_production p
+JOIN produced_energy p
   ON s.date = p.date AND s.hour = p.hour AND p.type = 'real' and s.type = 'real'
 WHERE s.sold_energy IS NOT NULL
+AND s.object_id = 1
 """
 
-GET_PV_PRODUCTION_PREDICTION_DATA = """
+GET_PRODUCED_ENERGY_PREDICTION_DATA = """ 
 SELECT
     p.date,
     p.hour,
@@ -52,7 +53,7 @@ SELECT
     p.produced_energy,
     p.type,
     p.object_id
-FROM pv_production p
+FROM produced_energy p
 JOIN weather w
   ON p.date = w.date AND p.hour = w.hour AND w.type = 'predicted'
 WHERE p.produced_energy IS NULL
@@ -67,7 +68,7 @@ SELECT
     s.type,
     s.object_id
 FROM sold_energy s
-JOIN pv_production p
+JOIN produced_energy p
   ON s.date = p.date AND s.hour = p.hour AND s.type = 'predicted' AND p.type = 'predicted'
 WHERE s.sold_energy IS NULL
 """
@@ -77,7 +78,7 @@ SELECT
     p.date,
     p.hour,
     p.produced_energy
-FROM pv_production p
+FROM produced_energy p
 WHERE p.produced_energy IS NOT NULL
   AND p.date = :date
   AND p.type = :data_type
@@ -109,7 +110,7 @@ DO UPDATE SET
 """
 
 UPDATE_PRODUCED_ENERGY = """
-UPDATE pv_production
+UPDATE produced_energy
 SET produced_energy = :produced_energy
 WHERE date = :date AND hour = :hour AND type = :type AND object_id = :object_id
 """
@@ -120,11 +121,11 @@ SET sold_energy = :sold_energy
 WHERE date = :date AND hour = :hour AND type = :type AND object_id = :object_id
 """
 
-DELETE_PV_PRODUCTION_PREDICTED = """
-DELETE FROM pv_production WHERE type = 'predicted' AND date >= :from_date
+DELETE_PRODUCED_ENERGY_PREDICTION = """
+DELETE FROM produced_energy WHERE type = 'predicted' AND date >= :from_date
 """
 
-DELETE_SOLD_ENERGY_PREDICTED = """
+DELETE_SOLD_ENERGY_PREDICTION = """
 DELETE FROM sold_energy WHERE type = 'predicted' AND date >= :from_date
 """
 
