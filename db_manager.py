@@ -16,8 +16,8 @@ class DBManager:
         self.engine = create_engine(db_url)
         self.logger = logging.getLogger(__name__)
 
-    def get_latest_pv_production_date(self, type_value="real"):
-        query = text(sql_queries.GET_LATEST_PV_PRODUCTION_DATE)
+    def get_latest_energy_production_date(self, type_value="real"):
+        query = text(sql_queries.GET_LATEST_ENERGY_PRODUCTION_DATE)
         with self.engine.connect() as conn:
             result = conn.execute(query, {"type_value": type_value}).fetchone()
         return result[0] if result else None
@@ -41,10 +41,10 @@ class DBManager:
     def clear_and_reset_tables(self):
         # Usuwa wszystkie dane i resetuje liczniki id w obu tabelach
         with self.engine.begin() as conn:
-            conn.execute(text("TRUNCATE TABLE pv_production RESTART IDENTITY;"))
+            conn.execute(text("TRUNCATE TABLE energy_production RESTART IDENTITY;"))
             conn.execute(text("TRUNCATE TABLE sold_energy RESTART IDENTITY;"))
         self.logger.info(
-            "Tabele pv_production i sold_energy zostały wyczyszczone i zresetowane."
+            "Tabele produced_energy i sold_energy zostały wyczyszczone i zresetowane."
         )
 
     def _read_and_prepare_excel_data(self, excel_path):
@@ -58,7 +58,7 @@ class DBManager:
             return df[df["date"] > latest_date]
         return df
 
-    def _prepare_pv_production_df(self, df, object_id, type_value):
+    def _prepare_produced_energy_df(self, df, object_id, type_value):
         pv_cols = ["date", "hour", "produced_energy"]
         return (
             df[pv_cols]
@@ -89,31 +89,31 @@ class DBManager:
 
     def import_data_from_excel(self, excel_path, object_id, type_value="real"):
         """
-        Importuje dane z pliku Excel do tabel pv_production i sold_energy.
+        Importuje dane z pliku Excel do tabel produced_energy i sold_energy.
         Pomija duplikaty na podstawie (date, hour, type, object_id).
         """
         df = self._read_and_prepare_excel_data(excel_path)
-        latest_date = self.get_latest_pv_production_date(type_value=type_value)
+        latest_date = self.get_latest_energy_production_date(type_value=type_value)
         self.logger.info(f"Ostatnia data w bazie dla {type_value}: {latest_date}")
 
         df = self._filter_new_data(df, latest_date)
-        pv_df = self._prepare_pv_production_df(df, object_id, type_value)
+        pv_df = self._prepare_produced_energy_df(df, object_id, type_value)
         sold_df = self._prepare_sold_energy_df(df, object_id, type_value)
         self._insert_ignore_duplicates(
-            "pv_production", pv_df, ["date", "hour", "type", "object_id"]
+            "produced_energy", pv_df, ["date", "hour", "type", "object_id"]
         )
         self._insert_ignore_duplicates(
             "sold_energy", sold_df, ["date", "hour", "type", "object_id"]
         )
         self.logger.info(
-            f"Import danych historycznych z pliku excel.\nWstawiono {len(pv_df)} do pv_production i {len(sold_df)} do sold_energy (duplikaty pominięte)"
+            f"Import danych historycznych z pliku excel.\nWstawiono {len(pv_df)} do produced_energy i {len(sold_df)} do sold_energy (duplikaty pominięte)"
         )
 
-    def get_pv_production_training_data(self):
+    def get_produced_energy_training_data(self):
         """
         Zwraca DataFrame z danymi do nauki modelu (łącząc dane pogodowe i produkcję).
         """
-        query = text(sql_queries.GET_PV_PRODUCTION_TRAINING_DATA)
+        query = text(sql_queries.GET_PRODUCED_ENERGY_TRAINING_DATA)
         df = pd.read_sql(query, self.engine)
         df["date"] = pd.to_datetime(df["date"])
         df["month"] = df["date"].dt.month
@@ -190,12 +190,12 @@ class DBManager:
             f"Wstawiono lub zaktualizowano {len(weather_df)} typu {type_value} rekordów do tabeli weather.\nOd {get_oldest_date(weather_df)} do {get_latest_date(weather_df)}."
         )
 
-    def get_pv_production_prediction_data(self):
+    def get_produced_energy_prediction_data(self):
         """
-        Pobiera dane z bazy do predykcji (rekordy z pv_production, gdzie produced_energy jest NULL),
+        Pobiera dane z bazy do predykcji (rekordy z produced_energy, gdzie produced_energy jest NULL),
         łącząc z danymi pogodowymi.
         """
-        query = text(sql_queries.GET_PV_PRODUCTION_PREDICTION_DATA)
+        query = text(sql_queries.GET_PRODUCED_ENERGY_PREDICTION_DATA)
         df = pd.read_sql(query, self.engine)
         df["date"] = pd.to_datetime(df["date"])
         df["month"] = df["date"].dt.month
@@ -204,7 +204,7 @@ class DBManager:
 
     def update_predicted_produced_energy(self, df):
         """
-        Aktualizuje kolumnę produced_energy w pv_production na podstawie DataFrame (po predykcji).
+        Aktualizuje kolumnę produced_energy w produced_energy na podstawie DataFrame (po predykcji).
         """
         with self.engine.begin() as conn:
             for _, row in df.iterrows():
@@ -220,7 +220,7 @@ class DBManager:
                         },
                     )
             self.logger.info(
-                f"Zaktualizowano {len(df)} rekordów w tabeli pv_production."
+                f"Zaktualizowano {len(df)} rekordów w tabeli produced_energy."
             )
 
     def update_predicted_sold_energy(self, df):
@@ -244,7 +244,7 @@ class DBManager:
 
     def clear_predicted_rows(self, from_date=None):
         """
-        Usuwa rekordy typu 'predicted' z obu tabel: pv_production i sold_energy od podanej daty (włącznie).
+        Usuwa rekordy typu 'predicted' z obu tabel: produced_energy i sold_energy od podanej daty (włącznie).
         Jeśli from_date nie jest podane, domyślnie czyści od dzisiaj.
         """
 
@@ -252,32 +252,32 @@ class DBManager:
             from_date = datetime.date.today()
         with self.engine.begin() as conn:
             conn.execute(
-                text(sql_queries.DELETE_PV_PRODUCTION_PREDICTED),
+                text(sql_queries.DELETE_PRODUCED_ENERGY_PREDICTION),
                 {"from_date": from_date},
             )
             conn.execute(
-                text(sql_queries.DELETE_SOLD_ENERGY_PREDICTED),
+                text(sql_queries.DELETE_SOLD_ENERGY_PREDICTION),
                 {"from_date": from_date},
             )
 
         self.logger.info(
-            f"Usunięto rekordy typu 'predicted' z pv_production i sold_energy od daty {from_date}."
+            f"Usunięto rekordy typu 'predicted' z produced_energy i sold_energy od daty {from_date}."
         )
 
     def insert_empty_predicted_rows(self, object_id=1):
         """
-        Wstawia puste rekordy (NULL) typu 'predicted' do obu tabel: pv_production i sold_energy
+        Wstawia puste rekordy (NULL) typu 'predicted' do obu tabel: produced_energy i sold_energy
         dla wszystkich dat/godzin z weather typu 'predicted'.
         """
         query = text(sql_queries.SELECT_DISTINCT_PREDICTED_WEATHER)
         df = pd.read_sql(query, self.engine)
         df["type"] = "predicted"
         df["object_id"] = object_id
-        # pv_production
+        # produced_energy
         df_pv = df.copy()
         df_pv["produced_energy"] = None
         self._insert_ignore_duplicates(
-            "pv_production",
+            "produced_energy",
             df_pv[["date", "hour", "produced_energy", "type", "object_id"]],
             ["date", "hour", "type", "object_id"],
         )
@@ -290,7 +290,7 @@ class DBManager:
             ["date", "hour", "type", "object_id"],
         )
         self.logger.info(
-            f"Wstawiono puste rekordy typu 'predicted' do pv_production i sold_energy dla {len(df)} dat/godzin. Od {df['date'].min()} do {df['date'].max()}."
+            f"Wstawiono puste rekordy typu 'predicted' do produced_energy i sold_energy dla {len(df)} dat/godzin. Od {df['date'].min()} do {df['date'].max()}."
         )
 
     def get_sold_energy_prediction_data(self):
@@ -359,7 +359,7 @@ class DBManager:
                 subset=["produced_energy"]
             )
             self._insert_ignore_duplicates(
-                "pv_production", pv_df, ["date", "hour", "type", "object_id"]
+                "produced_energy", pv_df, ["date", "hour", "type", "object_id"]
             )
 
     def import_data_from_csv(self, csv_path, object_id, type_value="real"):
@@ -380,7 +380,7 @@ class DBManager:
         pv_df["object_id"] = object_id
         # Wstaw dane do bazy (analogicznie jak w import_data_from_excel)
         self._insert_ignore_duplicates(
-            "pv_production", pv_df, ["date", "hour", "type", "object_id"]
+            "produced_energy", pv_df, ["date", "hour", "type", "object_id"]
         )
         return len(pv_df)
 
