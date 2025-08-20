@@ -1,3 +1,4 @@
+import pandas as pd
 import logging
 import datetime
 import holidays
@@ -6,8 +7,11 @@ import pandas as pd
 from sqlalchemy import Table, MetaData
 from sqlalchemy import create_engine, text
 from sqlalchemy.dialects.postgresql import insert
+import numpy as np
+
 
 class DBManager:
+
     def __init__(self, db_url):
         self.engine = create_engine(db_url)
         self.logger = logging.getLogger(__name__)
@@ -308,7 +312,9 @@ class DBManager:
             df["date"] = df["date"].dt.date
         return df
 
-    def get_energy_for_date(self, date, energy_type="produced", data_type="real", object_id=1):
+    def get_energy_for_date(
+        self, date, energy_type="produced", data_type="real", object_id=1
+    ):
         """
         Zwraca DataFrame z danymi produkcji lub sprzedaży energii (historyczne lub prognozy) dla konkretnego dnia.
         energy_type: "produced" (wyprodukowana) lub "sold" (wprowadzona/sprzedana)
@@ -320,7 +326,11 @@ class DBManager:
             query = text(sql_queries.GET_ENERGY_FOR_DATE_SOLD)
         else:
             raise ValueError("energy_type must be 'produced' or 'sold'")
-        df = pd.read_sql(query, self.engine, params={"date": date, "data_type": data_type, "object_id": object_id})
+        df = pd.read_sql(
+            query,
+            self.engine,
+            params={"date": date, "data_type": data_type, "object_id": object_id},
+        )
         if not df.empty:
             df["date"] = pd.to_datetime(df["date"])
             df["month"] = df["date"].dt.month
@@ -338,8 +348,76 @@ class DBManager:
         df["object_id"] = object_id
 
         if energy_type == "sold":
-            sold_df = df[["date", "hour", "sold_energy", "type", "object_id"]].dropna(subset=["sold_energy"])
-            self._insert_ignore_duplicates("sold_energy", sold_df, ["date", "hour", "type", "object_id"])
+            sold_df = df[["date", "hour", "sold_energy", "type", "object_id"]].dropna(
+                subset=["sold_energy"]
+            )
+            self._insert_ignore_duplicates(
+                "sold_energy", sold_df, ["date", "hour", "type", "object_id"]
+            )
         elif energy_type == "produced":
-            pv_df = df[["date", "hour", "produced_energy", "type", "object_id"]].dropna(subset=["produced_energy"])
-            self._insert_ignore_duplicates("pv_production", pv_df, ["date", "hour", "type", "object_id"])
+            pv_df = df[["date", "hour", "produced_energy", "type", "object_id"]].dropna(
+                subset=["produced_energy"]
+            )
+            self._insert_ignore_duplicates(
+                "pv_production", pv_df, ["date", "hour", "type", "object_id"]
+            )
+
+    def import_data_from_csv(self, csv_path, object_id, type_value="real"):
+        """
+        Importuje dane produkcji energii z pliku CSV (Timestamp;Value) do bazy dla wybranego object_id.
+        """
+        df = pd.read_csv(csv_path, sep=";", decimal=",")
+        # Rozbij Timestamp na date i hour
+        df["date"] = pd.to_datetime(df["Timestamp"]).dt.date.astype(str)
+        df["hour"] = pd.to_datetime(df["Timestamp"]).dt.hour
+        df["produced_energy"] = df["Value"]
+        df["produced_energy"] = df["produced_energy"].astype(str).str.replace(",", ".")
+        # Zamień 'Bad' i inne nieprawidłowe na NaN, ale NIE usuwaj tych wierszy
+        df["produced_energy"] = pd.to_numeric(df["produced_energy"], errors="coerce")
+        # Przygotuj DataFrame w formacie zgodnym z bazą
+        pv_df = df[["date", "hour", "produced_energy"]].copy()
+        pv_df["type"] = type_value
+        pv_df["object_id"] = object_id
+        # Wstaw dane do bazy (analogicznie jak w import_data_from_excel)
+        self._insert_ignore_duplicates(
+            "pv_production", pv_df, ["date", "hour", "type", "object_id"]
+        )
+        return len(pv_df)
+
+    def import_weather_from_csv(self, csv_path, type_value="real"):
+        df = pd.read_csv(csv_path, sep=";", decimal=",")
+        # Jeśli kolumna 'date' zawiera godzinę, wyodrębnij godzinę do osobnej kolumny
+        df["hour"] = pd.to_datetime(df["date"]).dt.hour
+        self.save_weather_data(df, type_value=type_value)
+
+    def import_sold_energy_from_csv(self, csv_path, type_value="real", object_id=None):
+        df = pd.read_csv(csv_path, sep=';', decimal=',', dtype=str)
+        df.columns = df.columns.str.strip().str.replace('"', '')
+        # Konwersja daty
+        df['date'] = pd.to_datetime(df['date'], errors='coerce')
+        # Wyodrębnij godzinę
+        df['hour'] = df['date'].dt.hour
+        # Zamień datę na samą datę (bez czasu)
+        df['date'] = df['date'].dt.date
+        # Konwersja energii
+        df['sold_energy'] = df['sold_energy'].astype(str).str.replace(',', '.').astype(float)
+        # Dodaj kolumny wymagane przez bazę
+        df['type'] = type_value
+        df['object_id'] = object_id
+        # Usuń wiersze z brakującą datą, godziną lub energią
+        df = df.dropna(subset=['date', 'hour', 'sold_energy'])
+        # Wstaw do bazy
+        self._insert_ignore_duplicates(
+            "sold_energy",
+            df[["date", "hour", "sold_energy", "type", "object_id"]],
+            ["date", "hour", "type", "object_id"]
+        )
+ 
+
+
+if __name__ == "__main__":
+    DB_URL = "postgresql+psycopg2://postgres:postgres@localhost:5432/energy_prediction"
+    db_manager = DBManager(DB_URL)
+    sold_energy_path = r"C:\Users\Użytkownik1\Desktop\python_scripts\energy_production_planner\sold_energy_2024_hour.csv"
+    # db_manager.import_data_from_csv(file_path, object_id=2)
+    db_manager.import_sold_energy_from_csv(sold_energy_path, type_value="real", object_id=2)
