@@ -73,7 +73,7 @@ JOIN produced_energy p
 WHERE s.sold_energy IS NULL
 """
 
-GET_ENERGY_FOR_DATE_PRODUCED = """
+GET_PRODUCED_ENERGY_FOR_DATE = """
 SELECT
     p.date,
     p.hour,
@@ -86,7 +86,7 @@ WHERE p.produced_energy IS NOT NULL
 ORDER BY p.hour
 """
 
-GET_ENERGY_FOR_DATE_SOLD = """
+GET_SOLD_ENERGY_FOR_DATE = """
 SELECT
     s.date,
     s.hour,
