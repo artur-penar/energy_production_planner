@@ -321,9 +321,9 @@ class DBManager:
         data_type: "real" (historyczne) lub "predicted" (prognozy)
         """
         if energy_type == "produced":
-            query = text(sql_queries.GET_ENERGY_FOR_DATE_PRODUCED)
+            query = text(sql_queries.GET_PRODUCED_ENERGY_FOR_DATE)
         elif energy_type == "sold":
-            query = text(sql_queries.GET_ENERGY_FOR_DATE_SOLD)
+            query = text(sql_queries.GET_SOLD_ENERGY_FOR_DATE)
         else:
             raise ValueError("energy_type must be 'produced' or 'sold'")
         df = pd.read_sql(
