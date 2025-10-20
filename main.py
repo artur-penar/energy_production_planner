@@ -2,10 +2,10 @@ import logging
 import pandas as pd
 from db_manager import DBManager
 from table_with_tabs import TableWithTabs
-from historical_weather_data_receiver import HistoricalWeatherDataReceiver
+from sold_energy_predictor import SoldEnergyPredictor
 from weather_data_receiver import ForecastWeatherDataReceiver
 from energy_production_predictor import EnergyProductionPredictor
-from sold_energy_predictor import SoldEnergyPredictor
+from historical_weather_data_receiver import HistoricalWeatherDataReceiver
 
 logging.basicConfig(level=logging.INFO)
 
@@ -82,12 +82,10 @@ if __name__ == "__main__":
         longitude=LONGITUDE,
         output_file=FORECAST_FILE,
         past_days=0,
-        forecast_days=9,
+        forecast_days=10,
     )
 
     historical_weather = historical_receiver.fetch_historical_data()
-    logging.info("Historical Weather Data:")
-    logging.info("\n%s", historical_weather)
 
     save_weather(
         historical_receiver, historical_receiver.fetch_historical_data, db, "real"
@@ -113,6 +111,7 @@ if __name__ == "__main__":
     train_predictor(energy_predictor, energy_production_training_data)
 
     sold_energy_training_data = db.get_sold_energy_training_data()
+
     train_predictor(sold_energy_predictor, sold_energy_training_data)
 
     db.clear_predicted_rows()
@@ -123,6 +122,7 @@ if __name__ == "__main__":
         db.get_produced_energy_prediction_data,
         db.update_predicted_produced_energy,
     )
+
     predict_and_save_data(
         sold_energy_predictor,
         db.get_sold_energy_prediction_data,
@@ -131,6 +131,7 @@ if __name__ == "__main__":
 
     produced_pivot = energy_predictor.return_pivot()
     sold_pivot = sold_energy_predictor.return_pivot()
+
     save_pivots_to_excel(
         {
             "energia_wyprodukowana": produced_pivot,
