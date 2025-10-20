@@ -91,21 +91,50 @@ class ForecastWeatherDataReceiver:
 
     def shift_hour_dst_only(self, df, date_col="date"):
         """
-        Dodaje 1 godzinę do daty tylko w okresie czasu letniego (DST) w Polsce.
+        Bezpieczna konwersja czasów do lokalnej strefy z obsługą DST/ambiguous,
+        bez wywoływania .dst() na NaT. Zwraca DataFrame z znormalizowaną kolumną date.
         """
-        dt = pd.to_datetime(df[date_col])
-        # Lokalizacja lub konwersja do strefy Europe/Berlin
-        if getattr(dt.dt, "tz", None) is None:
-            dt_local = dt.dt.tz_localize(
-                "Europe/Berlin", ambiguous="NaT", nonexistent="shift_forward"
-            )
-        else:
-            dt_local = dt.dt.tz_convert("Europe/Berlin")
-        # Sprawdzenie DST dla każdej daty
-        is_dst = dt_local.map(lambda x: x.dst() != pd.Timedelta(0))
-        # Dodanie godziny tylko tam, gdzie DST
-        df.loc[is_dst, date_col] = dt[is_dst] + pd.Timedelta(hours=1)
-        df.loc[~is_dst, date_col] = dt[~is_dst]
+        df = df.copy()
+        # upewnij się że to datetime
+        df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+
+        # jeśli są tylko naive timestamps traktujemy je jako UTC (jeśli dane przyszły z API z utc)
+        try:
+            series_tz = getattr(df[date_col].dt, "tz", None)
+        except Exception:
+            series_tz = None
+
+        if series_tz is None:
+            # lokalizujemy do UTC (bezpieczne), by móc konwertować do strefy docelowej
+            df[date_col] = df[date_col].dt.tz_localize("UTC")
+
+        # spróbuj scentralizowanej konwersji; jeśli zadziała -> OK
+        try:
+            df[date_col] = df[date_col].dt.tz_convert(self.timezone)
+        except Exception:
+            # fallback: per-row, bez wywoływania .dst() na NaT, obsługa ambiguous/nonexistent
+            def convert_safe(ts):
+                if pd.isna(ts):
+                    return pd.NaT
+                try:
+                    # jeśli ts jest tz-aware, konwertuj
+                    if ts.tzinfo is not None:
+                        return ts.tz_convert(self.timezone)
+                    # jeśli naive (nie powinno się zdarzyć po lokalizacji), spróbuj zlokalizować do target tz
+                    return ts.tz_localize(self.timezone, ambiguous="infer", nonexistent="shift_forward")
+                except Exception:
+                    # ostateczny fallback: zwróć oryginalny ts (bez zmiany strefy)
+                    return ts
+
+            df[date_col] = df[date_col].apply(convert_safe)
+
+        # usuń info o strefie (jeśli chcesz naive lokalne daty)
+        try:
+            df[date_col] = df[date_col].dt.tz_localize(None)
+        except Exception:
+            # jeśli nie da się usunąć strefy, zostaw jak jest — ważne, żeby nie było NaT przy .dst()
+            pass
+
         return df
 
     def run(self):
